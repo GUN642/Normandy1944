@@ -137,11 +137,23 @@ export class Player {
 
   // ------------------------------------------------------------ Bewegung
   update(dt, inp) {
+    this.updateInner(dt, inp);
+    const ok = Number.isFinite(this.pos.x + this.pos.y + this.pos.z + this.yaw + this.pitch + this.vel.x + this.vel.y + this.vel.z);
+    if (ok) { (this.safe || (this.safe = { pos: new THREE.Vector3() })).pos.copy(this.pos); this.safe.yaw = this.yaw; this.safe.pitch = this.pitch; }
+    else {
+      console.warn('Ungültige Spielerwerte – zurückgesetzt');
+      if (this.safe) { this.pos.copy(this.safe.pos); this.yaw = this.safe.yaw; this.pitch = this.safe.pitch; } else { this.yaw = 0; this.pitch = 0; }
+      this.vel.set(0, 0, 0); this.recoil = 0; this.recoilYaw = 0;
+      if (!Number.isFinite(this.pos.x + this.pos.y + this.pos.z)) this.pos.set(0, this.g.world.h(0, 0), 0);
+    }
+  }
+
+  updateInner(dt, inp) {
     const g = this.g, W = g.world;
     if (!this.alive) return;
     this.suppress = Math.max(0, this.suppress - dt * 0.35);
     // Blickrichtung
-    const sens = (g.settings.sensitivity || 1) * (1 - this.ads * (1 - 1 / this.W.zoom) * 0.85);
+    const sens = (g.settings.sensitivity || 1) * (1 - this.ads * (1 - 1 / (this.W.zoom || 1)) * 0.85);
     this.yaw -= inp.look.x * sens;
     this.pitch = clamp(this.pitch - inp.look.y * sens * (g.settings.invertY ? -1 : 1), -1.45, 1.45);
     // Rückstoß abbauen

@@ -12,7 +12,7 @@ export const WEAPONS = {
   springfield: { side: 'us', name: 'M1903A4 Springfield', cal: '.30-06', mag: 5, reserve: 40, rpm: 40, auto: false, bolt: true, vel: 853, dmg: 110, spread: [30, 0.3], recoil: 0.05, reload: 3.4, sound: 'rifle', zoom: 2.5, scope: 'weaver', range: 800, mass: 4.1 },
   m1911: { side: 'us', name: 'Colt M1911A1', cal: '.45 ACP', mag: 7, reserve: 21, rpm: 300, auto: false, vel: 253, dmg: 40, spread: [24, 6], recoil: 0.05, reload: 1.6, sound: 'pistol', zoom: 1.15, range: 50, mass: 1.1, pistol: true },
   bazooka: { side: 'us', name: 'M1A1 Bazooka', cal: '2.36 in', mag: 1, reserve: 4, rpm: 12, auto: false, vel: 82, dmg: 300, spread: [40, 4], recoil: 0.04, reload: 4.0, sound: 'rocket', zoom: 1.3, range: 150, mass: 6.8, rocket: true, at: true },
-  mk2: { side: 'us', name: 'Mk 2', cal: '', mag: 1, reserve: 2, rpm: 40, grenade: true, fuse: 4.5, vel: 18, dmg: 200, radius: 9, sound: 'throw', mass: 0.6 },
+  mk2: { side: 'us', name: 'Mk 2', cal: '', mag: 1, reserve: 2, rpm: 40, grenade: true, fuse: 4.5, vel: 18, zoom: 1, dmg: 200, radius: 9, sound: 'throw', mass: 0.6 },
   // ---------------------------------------------------------------- Deutschland
   kar98k: { side: 'de', name: 'Karabiner 98k', cal: '7,92 × 57', mag: 5, reserve: 50, rpm: 45, auto: false, bolt: true, vel: 760, dmg: 95, spread: [24, 0.8], recoil: 0.045, reload: 3.2, stripper: true, sound: 'rifle', zoom: 1.35, range: 500, mass: 3.9 },
   g43: { side: 'de', name: 'Gewehr 43', cal: '7,92 × 57', mag: 10, reserve: 60, rpm: 110, auto: false, vel: 746, dmg: 85, spread: [24, 1.3], recoil: 0.04, reload: 2.8, sound: 'rifle', zoom: 1.35, range: 450, mass: 4.4 },
@@ -22,7 +22,7 @@ export const WEAPONS = {
   kar98zf: { side: 'de', name: 'Kar 98k mit ZF 39', cal: '7,92 × 57', mag: 5, reserve: 40, rpm: 40, auto: false, bolt: true, vel: 760, dmg: 110, spread: [30, 0.3], recoil: 0.05, reload: 3.6, sound: 'rifle', zoom: 4, scope: 'zf39', range: 800, mass: 4.8 },
   p38: { side: 'de', name: 'Walther P38', cal: '9 × 19', mag: 8, reserve: 24, rpm: 320, auto: false, vel: 350, dmg: 34, spread: [22, 5], recoil: 0.04, reload: 1.5, sound: 'pistol', zoom: 1.15, range: 50, mass: 0.95, pistol: true },
   panzerfaust: { side: 'de', name: 'Panzerfaust 60', cal: '149 mm', mag: 1, reserve: 2, rpm: 10, auto: false, vel: 45, dmg: 400, spread: [40, 5], recoil: 0.05, reload: 3.0, sound: 'rocket', zoom: 1.2, range: 60, mass: 6.1, rocket: true, at: true, lob: true },
-  stiel: { side: 'de', name: 'Stielhandgranate 24', cal: '', mag: 1, reserve: 2, rpm: 40, grenade: true, fuse: 4.5, vel: 21, dmg: 180, radius: 8, sound: 'throw', mass: 0.6 },
+  stiel: { side: 'de', name: 'Stielhandgranate 24', cal: '', mag: 1, reserve: 2, rpm: 40, grenade: true, fuse: 4.5, vel: 21, zoom: 1, dmg: 180, radius: 8, sound: 'throw', mass: 0.6 },
 };
 for (const [id, w] of Object.entries(WEAPONS)) w.id = id;
 

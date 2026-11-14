@@ -2,7 +2,7 @@
 // Räumlich: Lautstärke, Stereo-Position und Tiefpass nach Entfernung; Schall kommt mit Verzögerung (343 m/s).
 import * as THREE from './lib/three.module.min.js';
 
-const SR = 44100;
+let SR = 44100;   // wird beim Start auf die Rate des Geräts gesetzt (Android meist 48 kHz)
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3();
 
 export class AudioSys {
@@ -13,14 +13,15 @@ export class AudioSys {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = (this.ctx = new AC());
+    SR = ctx.sampleRate || 44100;
     this.master = ctx.createGain(); this.master.gain.value = this.volume;
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.knee.value = 10;
     this.master.connect(comp).connect(ctx.destination);
     this.sfx = ctx.createGain(); this.sfx.connect(this.master);
     this.amb = ctx.createGain(); this.amb.gain.value = 0.7; this.amb.connect(this.master);
     // Nachhall (synthetische Impulsantwort)
-    this.verb = ctx.createConvolver(); this.verb.buffer = this.impulse(2.4, 2.2);
-    this.verbIn = ctx.createGain(); this.verbIn.gain.value = 0.32; this.verbIn.connect(this.verb).connect(this.master);
+    this.verbIn = ctx.createGain(); this.verbIn.gain.value = 0.32;
+    try { this.verb = ctx.createConvolver(); this.verb.buffer = this.impulse(2.4, 2.2); this.verbIn.connect(this.verb).connect(this.master); } catch (e) { console.warn('Hall nicht verfügbar', e); }
     // Taubheit nach Explosionen: globaler Tiefpass
     this.deaf = ctx.createBiquadFilter(); this.deaf.type = 'lowpass'; this.deaf.frequency.value = 20000;
     this.sfx.disconnect(); this.sfx.connect(this.deaf).connect(this.master);
@@ -146,6 +147,8 @@ export class AudioSys {
   // pos: Weltposition (null = am Hörer), vol, rate, opts: { far: Hörweite, delay: zusätzlich, verb }
   play(name, pos = null, vol = 1, rate = 1, opts = {}) {
     if (!this.ctx || !this.B) return;
+    if (pos && !(Number.isFinite(pos.x) && Number.isFinite(pos.y) && Number.isFinite(pos.z))) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
     const b = this.B[name];
     if (!b) return;
     if (this.active > 48 && !opts.important) return;
@@ -164,7 +167,7 @@ export class AudioSys {
     const g = ctx.createGain(); g.gain.value = vol * att;
     const src = ctx.createBufferSource(); src.buffer = b; src.playbackRate.value = rate * (dist > 200 ? 0.92 : 1);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.max(500, 16000 / (1 + dist / 60));
-    const p = ctx.createStereoPanner(); p.pan.value = pan * 0.85;
+    const p = ctx.createStereoPanner(); p.pan.value = Number.isFinite(pan) ? pan * 0.85 : 0;
     src.connect(lp).connect(g).connect(p).connect(this.sfx);
     if (opts.verb !== false) { const vg = ctx.createGain(); vg.gain.value = Math.min(1.2, 0.25 + dist / 300) * vol * Math.min(1, att * 3); p.connect(vg).connect(this.verbIn); }
     const delay = (opts.noDelay ? 0 : dist / 343) + (opts.delay || 0);

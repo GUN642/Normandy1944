@@ -392,19 +392,30 @@ class Game {
     this.showMenu('result');
   }
 
+  // Fehler protokollieren (höchstens einmal pro Sekunde), Spiel läuft weiter
+  reportError(e) {
+    const now = performance.now();
+    if (this._errT && now - this._errT < 1000) return;
+    this._errT = now;
+    console.error('Spielfehler', e);
+    this.lastError = String(e && e.stack || e).slice(0, 300);
+  }
+
   // ------------------------------------------------------------ Hauptschleife
   loop(t) {
     requestAnimationFrame((x) => this.loop(x));
     let dt = Math.min(0.05, (t - this.last) / 1000);
     this.last = t;
     this.input.poll(dt, this.state);
-    if (this.state === 'playing' || (this.state === 'paused' && this.net)) this.update(dt);
+    if (this.state === 'playing' || (this.state === 'paused' && this.net)) {
+      try { this.update(dt); } catch (e) { this.reportError(e); }
+    }
     else {
       // Verbindungsaufbau läuft auch im Menü weiter
       if (this.net && this.state !== 'loading') this.net.update(dt);
       this.menuGamepad();
     }
-    if (this.world) this.render(dt);
+    if (this.world) { try { this.render(dt); } catch (e) { this.reportError(e); } }
     else { this.renderer.setClearColor(0x1e1c17); this.renderer.clear(); }
   }
 

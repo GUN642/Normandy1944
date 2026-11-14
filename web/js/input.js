@@ -146,7 +146,8 @@ export class Input {
     const l = Math.hypot(mx, my);
     if (l > 1) { mx /= l; my /= l; }
     this.move.x = mx; this.move.y = my;
-    this.look.x = lx; this.look.y = ly;
+    this.look.x = Number.isFinite(lx) ? lx : 0; this.look.y = Number.isFinite(ly) ? ly : 0;
+    if (!Number.isFinite(this.move.x + this.move.y)) { this.move.x = 0; this.move.y = 0; }
     // Zielhilfe-Hinweis für Touch/Gamepad
     this.assist = this.device !== 'keyboard';
   }
