@@ -17,7 +17,7 @@ import { Comms } from './comms.js';
 import { Voice } from './voice.js';
 import { OPERATIONS, CAMPAIGN, EPILOGUE, opById, SIDES } from './story.js';
 import { WEAPONS, CLASSES, PLAYER_CLASSES } from './weapons.js';
-import { SoldierRig } from './models.js';
+import { SoldierRig, buildPlane, buildChute } from './models.js';
 import { uniformFor } from './units.js';
 import { T, L, setLang, getLang } from './i18n.js';
 import { loadSettings, saveSettings, loadStats, saveStats, loadCampaign, saveCampaign, rankFor, isMobile, isApp, fetchVersion, appVersion, appCheckUpdate, enterFullscreen, QUALITY } from './platform.js';
@@ -196,6 +196,18 @@ class Game {
     this.audio.init();
     this.audio.setVolume(this.settings.volume);
     this.atmo.setup();
+    // Shader vorab übersetzen (Explosionen, Partikel, Waffe), damit es im Gefecht nicht ruckelt
+    try {
+      this.effects.explosion(0, -200, 0, 1);
+      // Modelle, die erst später auftauchen (Flugzeuge, Fallschirm), einmal unsichtbar vorzeichnen
+      const warm = new THREE.Group();
+      for (const m of [buildPlane('c47'), buildPlane('p47'), buildChute(), buildChute(true)]) { m.scale.setScalar(0.001); warm.add(m); }
+      this.camera.add(warm); warm.position.set(0, 0, -5);
+      this.player.updateView(0.016);
+      this.renderer.render(this.scene, this.camera);
+      this.camera.remove(warm);
+      this.renderer.compile(this.scene, this.camera); this.renderer.compile(this.player.vm.scene, this.player.vm.cam);
+    } catch (e) { console.warn(e); }
     if (this.input.device === 'keyboard' && !isMobile) { this.input.wantLock = true; this.input.lock(); }
     document.body.classList.add('ingame');
     this.netReady = !!this.net;
@@ -229,7 +241,7 @@ class Game {
     if (this.missions) this.missions.clear();
     if (this.atmo) this.atmo.dispose();
     if (this.decals) this.decals.dispose();
-    if (this.effects) { for (const p of [this.effects.smoke, this.effects.fire, this.effects.glow]) this.scene.remove(p.mesh); this.scene.remove(this.effects.tracers.mesh); for (const l of this.effects.lights) this.scene.remove(l.l); for (const f of this.effects.flares) if (f.light) this.scene.remove(f.light); }
+    if (this.effects) { for (const p of [this.effects.smoke, this.effects.fire, this.effects.glow]) this.scene.remove(p.mesh); this.scene.remove(this.effects.tracers.mesh); for (const l of this.effects.lights) this.scene.remove(l.l); for (const l of this.effects.flareLights) this.scene.remove(l); }
     if (this.world) this.world.dispose();
     if (this.playerRig) { this.playerRig.dispose(); this.playerRig = null; }
     for (const a of this.avatars.values()) a.dispose();

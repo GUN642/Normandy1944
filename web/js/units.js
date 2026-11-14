@@ -1,7 +1,7 @@
 // KI-Soldaten, Trupps und Panzer.
 // Der Host (bzw. Einzelspieler) rechnet die KI; Mitspieler erhalten Schnappschüsse und zeigen nur Puppen an.
 import * as THREE from './lib/three.module.min.js';
-import { SoldierRig, buildTank, TANKS, buildChute } from './models.js';
+import { SoldierRig, buildTank, TANKS, buildChute, MAT } from './models.js';
 import { WEAPONS, CLASSES } from './weapons.js';
 import { clamp, wrapAngle, rand, makeRng } from './util.js';
 import { T } from './i18n.js';
@@ -249,7 +249,7 @@ export class Units {
     g.effects.explosion(t.pos.x, t.pos.y + 1.2, t.pos.z, 3);
     g.audio.play('boomBig', t.pos, 1, 0.8, { far: 1200, important: true });
     g.effects.burn(t.pos.x, t.pos.y + 1.6, t.pos.z, 120, 1.4);
-    t.m.root.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(0x2a2724); o.material.vertexColors = false; } });
+    t.m.root.traverse((o) => { if (o.isMesh) o.material = MAT.burnt; });
     t.m.turret.rotation.z = 0.15; t.m.gun.rotation.x = -0.15;
     if (t.squad) t.squad.tank = null;
     const tg = g.world.targets[t.id];

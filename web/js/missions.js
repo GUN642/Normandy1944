@@ -1,7 +1,7 @@
 // Missionsablauf: Aufstellung, Ziele beider Seiten, Funkzeitplan, Landungsboote, Absprung, Sprengladungen,
 // Verstärkung, Sieg und Niederlage. Rechnet beim Host bzw. im Einzelspiel; Mitspieler erhalten den Zustand.
 import * as THREE from './lib/three.module.min.js';
-import { buildBoat, buildChute } from './models.js';
+import { buildBoat, buildChute, MAT } from './models.js';
 import { L, T } from './i18n.js';
 import { rand } from './util.js';
 
@@ -424,7 +424,7 @@ export class Missions {
     tg.charging = false;
     if (tg.kind === 'wire') { if (tg.mesh) g.world.group.remove(tg.mesh); if (tg.box) tg.box.cut = true; tg.box.soft = true; }
     else if (tg.mesh && (tg.kind === 'gun' || tg.kind === 'flak')) {
-      tg.mesh.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(0x2c2a26); o.material.vertexColors = false; } });
+      tg.mesh.traverse((o) => { if (o.isMesh) o.material = MAT.burnt; });
       tg.mesh.rotation.z = 0.25;
       g.effects.burn(tg.pos.x, tg.pos.y, tg.pos.z, 40, 0.7);
     } else if (tg.kind === 'bunker') g.effects.burn(tg.pos.x, tg.pos.y + 1, tg.pos.z, 50, 0.8);

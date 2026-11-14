@@ -69,13 +69,20 @@ export class Input {
     });
     window.addEventListener('keyup', (e) => { this.down.delete(e.code); });
     window.addEventListener('blur', () => this.releaseAll());
+    // Touchgerät: Bedienfläche von Anfang an zeigen; Maus-Ersatzereignisse nach Berührungen ignorieren
+    this.lastTouch = 0;
+    const touchOn = () => { this.lastTouch = performance.now(); this.device = 'touch'; document.body.classList.add('touchmode'); };
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touchmode');
+    window.addEventListener('touchstart', touchOn, { passive: true, capture: true });
+    window.addEventListener('mousemove', (e) => { if (performance.now() - this.lastTouch > 1500 && (Math.abs(e.movementX) + Math.abs(e.movementY) > 0) && !('ontouchstart' in window)) document.body.classList.remove('touchmode'); });
     canvas.addEventListener('mousedown', (e) => {
+      if (performance.now() - this.lastTouch < 1000) return;
       if (this.capture) { e.preventDefault(); const cb = this.capture; this.capture = null; cb('Mouse' + e.button); return; }
       this.device = 'keyboard';
       if (!this.locked && this.wantLock) this.lock();
       else this.down.add('Mouse' + e.button);
     });
-    window.addEventListener('mouseup', (e) => this.down.delete('Mouse' + e.button));
+    window.addEventListener('mouseup', (e) => { if (performance.now() - this.lastTouch < 1000) return; this.down.delete('Mouse' + e.button); });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('mousemove', (e) => { if (this.locked) { this.mdx += e.movementX; this.mdy += e.movementY; } });
     document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === canvas; if (!this.locked) this.releaseAll(); if (this.onLock) this.onLock(this.locked); });

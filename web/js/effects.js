@@ -71,16 +71,17 @@ class Particles {
       const a = p.a * (k < 0.08 ? k / 0.08 : 1 - Math.pow((k - 0.08) / 0.92, p.fade || 1.4));
       const c = p.c;
       const ci = p.c1 ? 1 - k : 1;
-      this.pos.array.set([p.x, p.y, p.z, s], n * 4);
-      if (p.c1) this.col.array.set([c[0] * ci + p.c1[0] * k, c[1] * ci + p.c1[1] * k, c[2] * ci + p.c1[2] * k, a], n * 4);
-      else this.col.array.set([c[0], c[1], c[2], a], n * 4);
+      const P = this.pos.array, Cc = this.col.array, o = n * 4;
+      P[o] = p.x; P[o + 1] = p.y; P[o + 2] = p.z; P[o + 3] = s;
+      if (p.c1) { Cc[o] = c[0] * ci + p.c1[0] * k; Cc[o + 1] = c[1] * ci + p.c1[1] * k; Cc[o + 2] = c[2] * ci + p.c1[2] * k; }
+      else { Cc[o] = c[0]; Cc[o + 1] = c[1]; Cc[o + 2] = c[2]; }
+      Cc[o + 3] = a;
       this.rot.array[n] = p.r + p.age * (p.vr || 0);
       L[n++] = p;
     }
     L.length = n;
     this.g.instanceCount = n;
     this.pos.needsUpdate = this.col.needsUpdate = this.rot.needsUpdate = true;
-    this.pos.addUpdateRange(0, n * 4); this.col.addUpdateRange(0, n * 4); this.rot.addUpdateRange(0, n);
   }
 }
 
@@ -128,8 +129,9 @@ class Tracers {
     let n = 0;
     for (const t of list) {
       if (n >= this.max) break;
-      this.a.array.set([t.x - t.vx * t.len, t.y - t.vy * t.len, t.z - t.vz * t.len, t.w || 0.035], n * 4);
-      this.b.array.set([t.x, t.y, t.z, t.green ? 1 : 0], n * 4);
+      const A = this.a.array, B = this.b.array, o = n * 4;
+      A[o] = t.x - t.vx * t.len; A[o + 1] = t.y - t.vy * t.len; A[o + 2] = t.z - t.vz * t.len; A[o + 3] = t.w || 0.035;
+      B[o] = t.x; B[o + 1] = t.y; B[o + 2] = t.z; B[o + 3] = t.green ? 1 : 0;
       n++;
     }
     this.g.instanceCount = n;
@@ -158,6 +160,9 @@ export class Effects {
       }
     }
     this.flares = [];
+    // Leuchtkugel-Lichter fest anlegen: neue Lichter zur Laufzeit zwingen alle Shader zur Neuübersetzung (Ruckler/Hänger)
+    this.flareLights = [];
+    for (let i = 0; i < 2; i++) { const l = new THREE.PointLight(0xfff2d0, 0, 260, 1.4); l.position.set(0, -500, 0); scene.add(l); this.flareLights.push(l); }
   }
 
   flashLight(x, y, z, intensity = 6, dur = 0.06, range = 18, color = 0xffaa55) {
@@ -233,8 +238,9 @@ export class Effects {
 
   // Leuchtkugel (Fallschirm-Leuchtgeschoss): hängt am Himmel, sinkt langsam, beleuchtet die Szene
   flare(x, y, z, color = 0xfff2d0) {
-    let light = null;
-    if (this.q.lights || true) { light = new THREE.PointLight(color, 0, 260, 1.4); this.g.scene.add(light); }
+    const used = new Set(this.flares.map((f) => f.light));
+    const light = this.flareLights.find((l) => !used.has(l)) || null;
+    if (light) light.color.setHex(color);
     this.flares.push({ x, y, z, t: 0, life: 28, light });
   }
 
@@ -268,7 +274,7 @@ export class Effects {
       if (f.light) { f.light.position.set(f.x, f.y, f.z); f.light.intensity = Math.max(0, k) * (90 + Math.sin(f.t * 23) * 15); }
       this.glow.spawn({ x: f.x, y: f.y, z: f.z, vx: 0, vy: 0, vz: 0, age: 0, life: 0.05, s0: 6, s1: 6, a: Math.max(0, k), c: [1, 0.95, 0.8], r: 0, fade: 1 });
       if (Math.random() < dt * 12) this.puff(f.x, f.y + 0.4, f.z, { life: 4, s0: 0.4, s1: 2, a: 0.25, c: [0.8, 0.8, 0.78], rise: 0.6 });
-      if (f.t > f.life) { if (f.light) this.g.scene.remove(f.light); this.flares.splice(i, 1); }
+      if (f.t > f.life) { if (f.light) f.light.intensity = 0; this.flares.splice(i, 1); }
     }
     this.smoke.update(dt, this.wind);
     this.fire.update(dt, this.wind);

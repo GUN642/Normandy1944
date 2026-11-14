@@ -10,6 +10,7 @@ export function initMaterials() {
   MAT.vc = new THREE.MeshLambertMaterial({ vertexColors: true });
   MAT.vcStd = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 });
   MAT.metal = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.55 });
+  MAT.burnt = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.3, color: 0x2c2a26 });
   MAT.stone = new THREE.MeshLambertMaterial({ map: tex('stone'), vertexColors: true });
   MAT.plaster = new THREE.MeshLambertMaterial({ map: tex('plaster'), vertexColors: true });
   MAT.slate = new THREE.MeshLambertMaterial({ map: tex('slate'), vertexColors: true });
@@ -526,8 +527,14 @@ export function wireGeo(len) {
 
 // ================================================================ Flugzeuge
 // C-47 Skytrain mit Invasionsstreifen, P-47 Thunderbolt
+const PLANE_GEO = {};
 export function buildPlane(kind) {
   initMaterials();
+  if (!PLANE_GEO[kind]) PLANE_GEO[kind] = planeGeo(kind);
+  const g = new THREE.Group(); g.add(new THREE.Mesh(PLANE_GEO[kind], MAT.vcStd));
+  return g;
+}
+function planeGeo(kind) {
   const p = [];
   const od = 0x4b4e36, stripeW = 0xe8e8e0, stripeB = 0x111111;
   const stripes = (cx, span, chord, y, z) => {
@@ -565,9 +572,7 @@ export function buildPlane(kind) {
     for (let i = 0; i < 5; i++) { const r = geo.cyl(0.62, 0.62, 0.3, 10); r.rotateX(Math.PI / 2); p.push({ geo: r, color: i % 2 ? stripeB : stripeW, matrix: M4(0, 0, 3.0 + i * 0.3) }); }
     stripes(0, 12.4, 2.4, -0.2, -1.6);
   }
-  const m = new THREE.Mesh(mergeColored(p), MAT.vcStd);
-  const g = new THREE.Group(); g.add(m);
-  return g;
+  return mergeColored(p);
 }
 
 // Landungsboot LCVP (Higgins-Boot) mit Bugklappe (ramp)
@@ -588,19 +593,19 @@ export function buildBoat() {
 }
 
 // Fallschirm (Kappe + Leinen)
+let CHUTE = null;
 export function buildChute(od = false) {
   initMaterials();
+  if (!CHUTE) {
+    const pts = [];
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * 2.7, 6.4, Math.sin(a) * 2.7), new THREE.Vector3(0, 1.6, 0)); }
+    CHUTE = { canopy: new THREE.SphereGeometry(3.4, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), lines: new THREE.BufferGeometry().setFromPoints(pts), lmat: new THREE.LineBasicMaterial({ color: 0x777766 }) };
+  }
   const g = new THREE.Group();
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(3.4, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), od ? MAT.chuteOD : MAT.chute);
+  const canopy = new THREE.Mesh(CHUTE.canopy, od ? MAT.chuteOD : MAT.chute);
   canopy.scale.y = 0.55; canopy.position.y = 6.5;
   g.add(canopy);
-  const lines = [];
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const l = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(Math.cos(a) * 2.7, 6.4, Math.sin(a) * 2.7), new THREE.Vector3(0, 1.6, 0)]);
-    lines.push(new THREE.Line(l, new THREE.LineBasicMaterial({ color: 0x777766 })));
-  }
-  lines.forEach((l) => g.add(l));
+  g.add(new THREE.LineSegments(CHUTE.lines, CHUTE.lmat));
   return g;
 }
 
