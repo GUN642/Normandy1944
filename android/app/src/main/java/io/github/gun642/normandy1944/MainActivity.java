@@ -1,0 +1,336 @@
+package io.github.gun642.normandy1944;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.net.wifi.WifiManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import java.util.Locale;
+import android.view.InputDevice;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+
+import androidx.webkit.WebViewAssetLoader;
+
+/**
+ * Hüllt das Browserspiel (assets/www) in eine Vollbild-WebView und prüft beim Start auf Updates.
+ */
+public class MainActivity extends Activity {
+    private static final String HOST = "appassets.androidplatform.net";
+    private static final String START_URL = "https://" + HOST + "/assets/www/index.html";
+
+    private WebView web;
+    private UpdateManager updater;
+    private boolean lastKeyFromGamepad;
+    private final LanNet net = new LanNet();
+    private static final int REQ_MIC = 7;
+    private PermissionRequest pendingMic;
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code != REQ_MIC || pendingMic == null) return;
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) pendingMic.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+        else pendingMic.deny();
+        pendingMic = null;
+    }
+    private WifiManager.MulticastLock mcLock;
+    private TextToSpeech tts;
+    MouseCapture mouse;
+    private boolean ttsReady;
+
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= 28) {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
+
+        web = new WebView(this);
+        mouse = new MouseCapture(web);
+        mouse.attach(web);
+        web.setBackgroundColor(0xFF1E1C17);
+        FrameLayout root = new FrameLayout(this);
+        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
+        hideSystemUi();
+
+        final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return loader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri u = request.getUrl();
+                if (HOST.equals(u.getHost())) return false;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, u));
+                } catch (Exception ignored) {
+                }
+                return true;
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            // Sprechfunk: Mikrofon nur für die eigene Spielseite freigeben, dafür ggf. die Android-Berechtigung erfragen
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> {
+                    boolean audio = false;
+                    for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
+                    if (!audio || request.getOrigin() == null || !HOST.equals(request.getOrigin().getHost())) { request.deny(); return; }
+                    if (Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        request.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                    } else {
+                        pendingMic = request;
+                        requestPermissions(new String[] { Manifest.permission.RECORD_AUDIO }, REQ_MIC);
+                    }
+                });
+            }
+        });
+
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        // Spieldateien liegen in der APK: nie aus dem WebView-Cache laden, sonst bleiben nach einem Update alte Dateien aktiv
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        android.content.SharedPreferences prefs = getSharedPreferences("app", 0);
+        if (prefs.getInt("cacheVersion", -1) != BuildConfig.VERSION_CODE) {
+            web.clearCache(true);
+            prefs.edit().putInt("cacheVersion", BuildConfig.VERSION_CODE).apply();
+        }
+
+        web.addJavascriptInterface(new Bridge(), "AndroidApp");
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.requestFocus();
+
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+        else web.loadUrl(START_URL);
+
+        updater = new UpdateManager(this);
+        updater.check(false);
+
+        // Sprachausgabe für Funksprüche
+        try { tts = new TextToSpeech(this, (st) -> ttsReady = st == TextToSpeech.SUCCESS); } catch (Throwable t) { tts = null; }
+
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        web.saveState(outState);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        web.onResume();
+        hideSystemUi();
+        updater.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        web.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        net.shutdown();
+        if (tts != null) { tts.shutdown(); tts = null; }
+        multicast(false);
+        if (web != null) web.destroy();
+        super.onDestroy();
+    }
+
+    // Maus-Einfangen beendet oder begonnen (z. B. Fokusverlust)
+    @Override
+    public void onPointerCaptureChanged(boolean hasCapture) {
+        if (Build.VERSION.SDK_INT >= 26) super.onPointerCaptureChanged(hasCapture);
+        if (mouse != null) mouse.lost(hasCapture);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemUi();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void hideSystemUi() {
+        View d = getWindow().getDecorView();
+        d.setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int src = event.getSource();
+        lastKeyFromGamepad = (src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                || (src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        return super.dispatchKeyEvent(event);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onBackPressed() {
+        // Controller-Taste B soll das Spiel nicht beenden
+        if (lastKeyFromGamepad) return;
+        web.evaluateJavascript(
+                "(function(){var g=window.game;if(!g)return 'none';"
+                        + "if(g.state==='playing'){g.pause(true);return 'paused';}"
+                        + "if(g.state==='paused'){g.pause(false);return 'resumed';}"
+                        + "return 'menu';})()",
+                value -> {
+                    if (value != null && value.contains("menu")) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Normandy 1944 beenden?")
+                                .setPositiveButton("Beenden", (d, w) -> finish())
+                                .setNegativeButton("Weiterspielen", null)
+                                .show();
+                    }
+                });
+    }
+
+    /** Schnittstelle für JavaScript (window.AndroidApp). */
+    private class Bridge {
+        /** Läuft die App auf einem Fernseher (Android TV)? Dann wählt das Spiel die einfache Grafik. */
+        @JavascriptInterface
+        public boolean isTv() {
+            try {
+                android.app.UiModeManager ui = (android.app.UiModeManager) getSystemService(Context.UI_MODE_SERVICE);
+                if (ui != null && ui.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) return true;
+                return getPackageManager().hasSystemFeature("android.software.leanback");
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public String getVersionName() {
+            return BuildConfig.VERSION_NAME;
+        }
+
+        @JavascriptInterface
+        public int getVersionCode() {
+            return BuildConfig.VERSION_CODE;
+        }
+
+        @JavascriptInterface
+        public void checkForUpdates() {
+            runOnUiThread(() -> updater.check(true));
+        }
+
+        // ---- LAN-Mehrspieler (siehe LanNet)
+        /** Maus einfangen (Zeiger verstecken, relative Bewegung ans Spiel) bzw. freigeben. */
+        @JavascriptInterface public boolean capturePointer(boolean on) {
+            if (!MouseCapture.supported()) return false;
+            runOnUiThread(() -> mouse.capture(web, on));
+            return true;
+        }
+        /** Funkspruch vorlesen (Sprachausgabe des Geräts); leerer Text = verstummen. */
+        @JavascriptInterface public void speak(String text, String lang, float rate, float pitch, boolean flush) {
+            runOnUiThread(() -> {
+                try {
+                    if (tts == null || !ttsReady) return;
+                    if (text == null || text.isEmpty()) { tts.stop(); return; }
+                    setMaleVoice(Locale.forLanguageTag(lang));
+                    tts.setSpeechRate(rate);
+                    tts.setPitch(pitch);
+                    tts.speak(text, flush ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, null, "n44" + System.nanoTime());
+                } catch (Throwable ignored) { }
+            });
+        }
+
+        @JavascriptInterface public String deviceName() { return Build.MODEL == null ? "Android" : Build.MODEL; }
+        @JavascriptInterface public String netHost(String info) { multicast(true); return net.host(info); }
+        @JavascriptInterface public void netInfo(String info) { net.setInfo(info); }
+        @JavascriptInterface public void netJoin(String ip, int port) { net.join(ip, port); }
+        @JavascriptInterface public void netSend(int peer, String msg) { net.send(peer, msg); }
+        @JavascriptInterface public void netKick(int peer) { net.kick(peer); }
+        @JavascriptInterface public String netPoll() { return net.poll(); }
+        @JavascriptInterface public void netScan(boolean on) { if (on) multicast(true); net.scan(on); }
+        @JavascriptInterface public String netHosts() { return net.hostsJson(); }
+        @JavascriptInterface public String netIp() { return LanNet.localIp(); }
+        @JavascriptInterface public void netStop() { net.stop(); net.scan(false); multicast(false); }
+    }
+
+    private String voiceLang;
+
+    /** Männliche Stimme der Sprache wählen (Name mit "male" bzw. bekannte männliche Google-Stimmen), sonst Standardstimme. */
+    private void setMaleVoice(Locale loc) {
+        if (loc.toLanguageTag().equals(voiceLang)) return;
+        voiceLang = loc.toLanguageTag();
+        tts.setLanguage(loc);
+        try {
+            android.speech.tts.Voice best = null;
+            int bestScore = 0;
+            for (android.speech.tts.Voice v : tts.getVoices()) {
+                if (v.getLocale() == null || !v.getLocale().getLanguage().equals(loc.getLanguage())) continue;
+                String n = v.getName().toLowerCase(Locale.ROOT);
+                int sc = 1;
+                if (n.contains("female")) sc = 0;
+                else if (n.contains("male")) sc = 5;
+                else if (n.matches(".*-(deg|deb|iom|tpd|iob|tpc|rjs|gbd|gbb)-.*")) sc = 4;
+                if (sc > 0 && !v.isNetworkConnectionRequired()) sc++;
+                if (v.getLocale().getCountry().equals(loc.getCountry())) sc++;
+                if (sc > bestScore) { bestScore = sc; best = v; }
+            }
+            if (best != null && bestScore >= 4) tts.setVoice(best);
+        } catch (Throwable ignored) { }
+    }
+
+    /** Manche Geräte filtern Broadcasts im WLAN, solange keine Multicast-Sperre gehalten wird. */
+    private synchronized void multicast(boolean on) {
+        try {
+            if (on && mcLock == null) {
+                WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wm != null) {
+                    mcLock = wm.createMulticastLock("n44");
+                    mcLock.setReferenceCounted(false);
+                    mcLock.acquire();
+                }
+            } else if (!on && mcLock != null) {
+                mcLock.release();
+                mcLock = null;
+            }
+        } catch (Exception ignored) {
+        }
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Normandy 1944",
+  "short_name": "Normandy 1944",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1e1c17",
+  "theme_color": "#1e1c17",
+  "icons": [{ "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

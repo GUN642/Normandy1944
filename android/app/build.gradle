@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Versionsnummer und Update-URL kommen aus der CI (GitHub Actions)
+def envOr = { String key, String fallback -> def v = System.getenv(key); return (v != null && !v.isEmpty()) ? v : fallback }
+def vCode = envOr('VERSION_CODE', '1').toInteger()
+def vName = envOr('VERSION_NAME', '1.0.0-dev')
+def updateUrl = envOr('UPDATE_URL', 'https://gun642.github.io/Normandy1944/version.json')
+
+android {
+    namespace 'io.github.gun642.normandy1944'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.gun642.normandy1944'
+        minSdk 24
+        targetSdk 34
+        versionCode vCode
+        versionName vName
+        buildConfigField 'String', 'UPDATE_URL', "\"${updateUrl}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    // Signiert wird nicht mehr hier: Gradle baut ein unsigniertes Release-APK, die CI signiert es
+    // in der geschützten Umgebung „release“ (Schlüssel nur dort, Freigabe per Klick).
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+    // Die Spieldateien (web/) kopiert die CI vor dem Build nach src/main/assets/www
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1e1c17">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" content="Normandy 1944 – Ego-Shooter zur Invasion in der Normandie: Kampagne und Mehrspieler, von amerikanischer und deutscher Seite spielbar.">
+<title>Normandy 1944</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="vig"></div>
+  <div id="flash"></div>
+  <div id="scope"><div class="lens"></div></div>
+  <canvas id="compass" width="460" height="34"></canvas>
+  <div id="objbox"><div id="obj-title"></div><div id="obj-text"></div><div id="obj-sub"></div></div>
+  <canvas id="minimap" width="170" height="170"></canvas>
+  <div id="radio-log"></div>
+  <div id="chat-log"></div>
+  <div id="feed"></div>
+  <div id="xhair"><i></i><i></i><i></i><i></i></div>
+  <div id="hitm"></div>
+  <div id="dmgdir"></div>
+  <div id="obj-marker"><b>◆</b><span></span></div>
+  <div id="hint"></div>
+  <div id="prog"><div id="prog-fill"></div></div>
+  <div id="toast"></div>
+  <div id="warn"></div>
+  <div id="status">
+    <div id="hpbar"><div id="hp-fill"></div></div><span id="hp-val"></span><span id="stance"></span><span id="w-band"></span>
+  </div>
+  <div id="weapon"><div id="w-name"></div><div id="w-ammo"></div><div id="w-nade"></div></div>
+  <div id="talk-ind" class="hidden"></div>
+  <div id="chat-box" class="hidden">
+    <input id="chat-input" type="text" maxlength="140" autocomplete="off" placeholder="Nachricht – Enter senden, Esc abbrechen" data-enph="Message – Enter to send, Esc to cancel">
+    <div id="chat-quick"><button data-en="Roger">Verstanden</button><button data-en="Contact!">Feindkontakt!</button><button data-en="Need help!">Brauche Hilfe!</button><button data-en="Medic!">Sanitäter!</button><button data-en="Move up!">Vorrücken!</button><button data-en="Covering fire!">Feuerschutz!</button></div>
+  </div>
+  <div id="radiomenu" class="hidden"></div>
+  <div id="scoreboard" class="hidden"></div>
+  <div id="mapview" class="hidden"><canvas width="600" height="600"></canvas></div>
+  <div id="respawn" class="hidden"><div id="resp-text"></div></div>
+  <div id="fps" class="hidden"></div>
+
+  <!-- Touch-Steuerung -->
+  <div id="touch">
+    <div id="t-stick"><div id="t-knob"></div></div>
+    <div class="tb" data-a="fire" id="tb-fire" data-en="FIRE">FEUER</div>
+    <div class="tb" data-a="aim" data-toggle="1" id="tb-aim" data-en="AIM">ZIELEN</div>
+    <div class="tb" data-a="reload" id="tb-reload" data-en="RELOAD">LADEN</div>
+    <div class="tb" data-a="jump" id="tb-jump">▲</div>
+    <div class="tb" data-a="crouch" id="tb-crouch" data-en="CROUCH">HOCKE</div>
+    <div class="tb" data-a="prone" id="tb-prone" data-en="PRONE">LIEGEN</div>
+    <div class="tb" data-a="grenade" id="tb-nade" data-en="GRENADE">GRANATE</div>
+    <div class="tb" data-a="wnext" id="tb-wpn" data-en="WEAPON">WAFFE</div>
+    <div class="tb" data-a="use" id="tb-use">E</div>
+    <div class="tb" data-a="heal" id="tb-heal">✚</div>
+    <div class="tb" data-a="sprint" data-toggle="1" id="tb-sprint">SPRINT</div>
+    <div class="tb mp-only" id="btn-ptt" data-en="RADIO 🎙">FUNK 🎙</div>
+    <div class="tbs">
+      <button class="tb" id="tb-radio">📻</button><button class="tb" id="tb-map">🗺</button><button class="tb mp-only" id="tb-chat">💬</button><button class="tb" id="tb-score">☰</button><button class="tb" id="tb-view">👁</button><button class="tb" id="tb-pause">⏸</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Menüs ============ -->
+<div id="s-menu" class="screen hidden">
+  <div class="title"><h1>NORMANDY <span>1944</span></h1><p class="sub" data-en="Operation Overlord · 6 June – July 1944">Operation Overlord · 6. Juni – Juli 1944</p></div>
+  <div class="mbtns">
+    <button class="btn" id="m-campaign" data-en="Campaign">Kampagne</button>
+    <button class="btn" id="m-free" data-en="Skirmish">Freies Gefecht</button>
+    <button class="btn" id="m-mp" data-en="Multiplayer">Mehrspieler</button>
+    <button class="btn" id="m-settings" data-en="Settings">Einstellungen</button>
+    <button class="btn" id="m-help" data-en="Controls">Steuerung</button>
+    <button class="btn" id="m-history" data-en="Historical background">Historischer Hintergrund</button>
+  </div>
+  <div id="main-stats"></div>
+  <div class="foot"><span id="ver"></span> <button class="btn small hidden" id="btn-update" data-en="Check for updates">Nach Updates suchen</button></div>
+</div>
+
+<div id="s-campaign" class="screen hidden">
+  <h2 data-en="Campaign">Kampagne</h2>
+  <div id="camp-side" class="tabs"><button data-side="us"><span data-en="🇺🇸 American side">🇺🇸 Amerikanische Seite</span></button><button data-side="de" data-en="German side">Deutsche Seite</button></div>
+  <p id="camp-unit" class="note"></p>
+  <div id="camp-list"></div>
+  <button class="btn back" data-en="Back">Zurück</button>
+</div>
+
+<div id="s-free" class="screen hidden">
+  <h2 data-en="Skirmish">Freies Gefecht</h2>
+  <div class="form">
+    <label><span data-en="Operation">Operation</span><select id="fr-op"></select></label>
+    <label><span data-en="Side">Seite</span><select id="fr-side"></select></label>
+    <label><span data-en="Weather">Wetter</span><select id="fr-weather"></select></label>
+    <label><span data-en="Time of day">Tageszeit</span><select id="fr-time"></select></label>
+    <label><span data-en="Troop strength">Truppenstärke</span><select id="fr-density"></select></label>
+  </div>
+  <p id="fr-info" class="note"></p>
+  <button class="btn" id="fr-go" data-en="To briefing">Zum Briefing</button>
+  <button class="btn back" data-en="Back">Zurück</button>
+</div>
+
+<div id="s-mp" class="screen hidden">
+  <h2 data-en="Multiplayer">Mehrspieler</h2>
+  <label class="wide"><span data-en="Your name">Ihr Name</span><input id="mp-name" maxlength="16"></label>
+  <div class="cols">
+    <div class="col">
+      <h3 data-en="Host a game">Spiel eröffnen</h3>
+      <label><span data-en="Operation">Operation</span><select id="mp-op"></select></label>
+      <label><span data-en="Mode">Modus</span><select id="mp-mode"></select></label>
+      <label><span data-en="Your side">Ihre Seite</span><select id="mp-hside"></select></label>
+      <label><span data-en="Troop strength">Truppenstärke</span><select id="mp-density"></select></label>
+      <button class="btn" id="mp-host" data-en="Host">Eröffnen</button>
+      <p class="note">Mitspieler treten mit dem Spielcode oder Einladungslink bei (Internet), in der Android-App auch direkt im WLAN.</p>
+    </div>
+    <div class="col">
+      <h3 data-en="Join">Beitreten</h3>
+      <label><span data-en="Game code">Spielcode</span><input id="mp-code" maxlength="6" placeholder="z. B. K7QXM" style="text-transform:uppercase"></label>
+      <label><span data-en="Side (versus only)">Seite (nur „Gegeneinander“)</span><select id="mp-side"></select></label>
+      <label><span data-en="Class">Klasse</span><select id="mp-cls"></select></label>
+      <button class="btn" id="mp-join" data-en="Join">Beitreten</button>
+      <div id="mp-lan" class="hidden"><h4 data-en="LAN games">Spiele im WLAN</h4><div id="mp-lanlist"></div></div>
+      <p id="mp-status"></p>
+    </div>
+  </div>
+  <button class="btn back" data-en="Back">Zurück</button>
+</div>
+
+<div id="s-briefing" class="screen hidden">
+  <div class="brief">
+    <div class="bl">
+      <p id="br-mode" class="tag"></p>
+      <h2 id="br-title"></h2>
+      <p id="br-meta" class="meta"></p>
+      <p id="br-unit" class="unit"></p>
+      <p id="br-history" class="hist"></p>
+      <h4 data-en="Orders">Auftrag</h4>
+      <p id="br-text"></p>
+      <h4 data-en="Objectives">Ziele</h4>
+      <ol id="br-obj"></ol>
+    </div>
+    <div class="br">
+      <canvas id="br-map" width="320" height="320"></canvas>
+      <h4 data-en="Equipment">Ausrüstung</h4>
+      <div id="br-cls"></div>
+    </div>
+  </div>
+  <div class="row"><button class="btn" id="br-start" data-en="Start mission">Einsatz beginnen</button><button class="btn back" data-en="Back">Zurück</button></div>
+</div>
+
+<div id="s-loading" class="screen hidden"><div class="loading"><div class="spin"></div><p id="load-text" data-en="Loading …">Lade …</p></div></div>
+
+<div id="s-pause" class="screen hidden">
+  <h2 data-en="Pause">Pause</h2>
+  <p id="pause-code" class="note"></p>
+  <p id="pause-mp" class="note hidden" data-en="Multiplayer: the battle continues.">Mehrspieler: Das Gefecht läuft weiter.</p>
+  <div class="mbtns">
+    <button class="btn" id="p-resume" data-en="Resume">Weiter</button>
+    <button class="btn" id="p-settings" data-en="Settings">Einstellungen</button>
+    <button class="btn" id="p-help" data-en="Controls">Steuerung</button>
+    <button class="btn" id="p-restart" data-en="Restart">Neu starten</button>
+    <button class="btn" id="p-menu" data-en="Main menu">Hauptmenü</button>
+  </div>
+</div>
+
+<div id="s-result" class="screen hidden">
+  <h2 id="res-title"></h2>
+  <div id="res-body"></div>
+  <div class="row"><button class="btn" id="res-next" data-en="Next mission">Nächste Mission</button><button class="btn" id="res-retry" data-en="Retry">Wiederholen</button><button class="btn" id="res-menu" data-en="Main menu">Hauptmenü</button></div>
+</div>
+
+<div id="s-settings" class="screen hidden">
+  <h2 data-en="Settings">Einstellungen</h2>
+  <div id="set-list"></div>
+  <p id="set-note" class="note"></p>
+  <button class="btn" id="set-back" data-en="Done">Fertig</button>
+</div>
+
+<div id="s-help" class="screen hidden">
+  <h2 data-en="Controls">Steuerung</h2>
+  <div class="cols help">
+    <div class="col"><h3 data-en="Keyboard & mouse">Tastatur & Maus</h3><ul>
+      <li><b>WASD</b> bewegen · <b>Shift</b> sprinten · <b>Leertaste</b> springen</li>
+      <li><b>C</b> hocken · <b>Z/Y</b> hinlegen</li>
+      <li><b>Linke Maus</b> feuern · <b>Rechte Maus</b> zielen / Zielfernrohr</li>
+      <li><b>R</b> nachladen · <b>Q</b> Waffe wechseln · <b>1–3</b> Waffe wählen</li>
+      <li><b>G</b> Handgranate (loslassen = werfen)</li>
+      <li><b>E</b> halten: Sprengladung, Bangalore, Flagge · Seil klettern</li>
+      <li><b>H</b> Verband anlegen</li>
+      <li><b>F</b> Funkmenü: Artillerie, Luftangriff, Nebelwerfer, Rauch (Ziel = Fadenkreuz)</li>
+      <li><b>M</b> Karte · <b>Tab</b> Lage · <b>V</b> Schulterkamera</li>
+      <li><b>Feststelltaste / Maustaste 5</b> Sprechfunk · <b>K/T</b> Chat</li>
+      <li><b>Esc</b> Pause</li></ul></div>
+    <div class="col"><h3 data-en="Gamepad">Gamepad</h3><ul>
+      <li>Linker Stick bewegen (drücken = sprinten), rechter Stick umsehen (drücken = hinlegen)</li>
+      <li><b>RT</b> feuern · <b>LT</b> zielen · <b>A</b> springen · <b>B</b> hocken</li>
+      <li><b>X</b> nachladen · <b>Y</b> Waffe · <b>LB</b> Granate · <b>RB</b> benutzen</li>
+      <li>Steuerkreuz: ↑ Funk · ↓ Verband · ← Sprechfunk · → Karte</li>
+      <li><b>Start</b> Pause · <b>Back</b> Lage</li></ul>
+      <h3 data-en="Touch">Touch</h3><ul>
+      <li>Linke Bildschirmhälfte: Bewegungsstick (ganz nach vorn = Sprint)</li>
+      <li>Rechte Hälfte wischen: umsehen; FEUER-Taste kann gleichzeitig gezogen werden</li>
+      <li>ZIELEN schaltet um · 📻 Funkmenü · 🗺 Karte · ⏸ Pause</li>
+      <li>Optional: Gyro-Zielen in den Einstellungen</li></ul></div>
+  </div>
+  <p class="note">Realismus: Kugeln haben Fallkurve und Laufzeit, Schüsse sind mit Verzögerung zu hören (Schallgeschwindigkeit), vorbeifliegende Geschosse „knallen“ und drücken in Deckung. Das M1 Garand lädt nur mit vollem 8-Schuss-Ladestreifen (teilgeladene werden ausgeworfen), Repetierer müssen nach jedem Schuss durchgeladen werden.</p>
+  <button class="btn back" data-en="Back">Zurück</button>
+</div>
+
+<div id="s-history" class="screen hidden">
+  <h2 data-en="Historical background">Historischer Hintergrund</h2>
+  <div class="hist-text">
+    <p>Am 6. Juni 1944 landen die Alliierten in der Normandie – die größte amphibische Operation der Geschichte. In der Nacht springen amerikanische und britische Luftlandetruppen hinter den Stränden ab; ab 06:30 Uhr landen die Seestreitkräfte an fünf Abschnitten: <b>Utah</b> und <b>Omaha</b> (USA), <b>Gold</b> und <b>Sword</b> (Großbritannien) und <b>Juno</b> (Kanada).</p>
+    <p>Dieses Spiel folgt den amerikanischen Abschnitten und der deutschen Verteidigung: dem zerstreuten Absprung der 82. und 101. Luftlandedivision, der Einnahme von Sainte-Mère-Église, dem verlustreichen Kampf am Omaha Beach, dem Angriff der Ranger auf die Pointe du Hoc, dem Sturm auf die Batterie bei Brécourt, der Verteidigung des Damms von La Fière, der Schlacht um Carentan und dem Heckenkrieg um die Höhe 192 vor Saint-Lô.</p>
+    <p>Einheiten, Orte, Uhrzeiten und Abläufe orientieren sich an den historischen Ereignissen. Die handelnden Personen sind erfunden; mit * markierte Namen sind an reale Kommandeure angelehnt. Das Spiel verzichtet bewusst auf verfassungsfeindliche Symbole und stellt den Krieg nicht verherrlichend dar: Am Ende jeder Mission steht der historische Ausgang – einschließlich der Verluste.</p>
+    <p>Allein am D-Day fielen oder wurden auf alliierter Seite rund 10.000 Soldaten verwundet oder vermisst; die deutschen Verluste lagen in ähnlicher Größenordnung. Bis Ende August 1944 forderte die Schlacht um die Normandie auf allen Seiten – auch unter der französischen Zivilbevölkerung – Hunderttausende Opfer.</p>
+  </div>
+  <button class="btn back" data-en="Back">Zurück</button>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

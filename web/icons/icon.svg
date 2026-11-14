@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c4246"/><stop offset="0.55" stop-color="#8a8270"/><stop offset="0.78" stop-color="#c7a76a"/><stop offset="1" stop-color="#3a3326"/></linearGradient>
+    <clipPath id="r"><rect width="108" height="108" rx="20"/></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="108" height="108" fill="url(#sky)"/>
+    <path d="M0 74 L18 70 L34 73 L52 66 L70 71 L88 67 L108 70 L108 108 L0 108Z" fill="#2c2a22"/>
+    <path d="M0 86 L108 84 L108 108 L0 108Z" fill="#595140"/>
+    <g fill="#18170f"><path d="M14 86 l7 -10 l7 10z"/><path d="M80 86 l6 -9 l6 9z"/></g>
+    <!-- M1-Helm -->
+    <path d="M28 60 C28 40 40 30 54 30 C68 30 80 40 80 60 L86 62 C86 65 84 66 80 66 L28 66 C24 66 22 65 22 62 Z" fill="#4a5034" stroke="#20221a" stroke-width="2"/>
+    <path d="M32 50 C38 38 70 38 76 50" fill="none" stroke="#5e6644" stroke-width="2"/>
+    <text x="54" y="100" font-family="Arial Narrow, Arial, sans-serif" font-weight="900" font-size="15" fill="#e8dfc4" text-anchor="middle" letter-spacing="1">1944</text>
+  </g>
+</svg>

@@ -1,0 +1,154 @@
+name: Build & Deploy
+
+# Wie beim Medevac-sim:
+#  - "check" läuft bei jedem Push auf jedem Branch: Syntaxprüfung der Spieldateien und Probebau der Android-App.
+#  - "release" + "deploy" nur auf dem Standardbranch: signierte APK bauen, version.json erzeugen,
+#    Website + APK auf GitHub Pages veröffentlichen. Die App findet Updates über version.json.
+#  - Signaturschlüssel liegen ausschließlich als Secrets in der Umgebung "release"
+#    (Settings → Environments → release, siehe android/keystore/README.md).
+#    Fehlen sie, wird die Website trotzdem veröffentlicht – nur ohne APK.
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Spieldateien prüfen (Syntax)
+        run: |
+          for f in web/js/*.js; do node --experimental-default-type=module --check "$f" || exit 1; done
+          node -e "import('./web/js/story.js').then(m => { if (m.OPERATIONS.length < 8) process.exit(1); console.log(m.OPERATIONS.length + ' Operationen'); })"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Spieldateien in die App kopieren
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp -r web/. android/app/src/main/assets/www/
+
+      - name: App bauen (Prüfung, unsigniert)
+        run: gradle -p android assembleRelease --no-daemon
+
+  release:
+    needs: check
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Update-URL bestimmen
+        run: |
+          OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          REPO="${GITHUB_REPOSITORY#*/}"
+          echo "UPDATE_URL=https://${OWNER}.github.io/${REPO}/version.json" >> "$GITHUB_ENV"
+
+      - name: version.json erzeugen
+        run: |
+          MSG=$(git log -1 --pretty=%s | sed 's/\\/\\\\/g; s/"/\\"/g')
+          cat > version.json <<JSON
+          { "versionCode": ${VERSION_CODE}, "versionName": "${VERSION_NAME}", "apkUrl": "apk/normandy1944.apk", "notes": "${MSG}", "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)" }
+          JSON
+          cat version.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Spieldateien in die App kopieren
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp -r web/. android/app/src/main/assets/www/
+          cp version.json android/app/src/main/assets/www/version.json
+
+      - name: APK bauen (unsigniert)
+        run: gradle -p android assembleRelease --no-daemon --stacktrace
+
+      - name: APK signieren
+        id: sign
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::warning::Signaturschlüssel fehlen in der Umgebung 'release' (siehe android/keystore/README.md) – Website wird ohne APK veröffentlicht."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" sign --out "$RUNNER_TEMP/signed.apk" \
+            --ks "$RUNNER_TEMP/release.jks" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$BT/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/signed.apk" | grep -E "Verified|Signer|SHA-256" || true
+          rm -f "$RUNNER_TEMP/release.jks"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Website zusammenstellen
+        run: |
+          mkdir -p _site/apk
+          cp -r web/. _site/
+          cp version.json _site/version.json
+          if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then cp "$RUNNER_TEMP/signed.apk" _site/apk/normandy1944.apk; fi
+          touch _site/.nojekyll
+
+      - uses: actions/upload-artifact@v4
+        if: steps.sign.outputs.signed == 'true'
+        with:
+          name: normandy1944-${{ env.VERSION_NAME }}.apk
+          path: _site/apk/normandy1944.apk
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: release
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

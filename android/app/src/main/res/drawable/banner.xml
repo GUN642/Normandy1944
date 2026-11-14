@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android-TV-Banner: Abendhimmel mit Hubschrauber-Silhouette -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_bg" android:width="320dp" android:height="180dp" />
+    <item android:drawable="@drawable/ic_launcher_fg" android:gravity="center" android:width="180dp" android:height="180dp" />
+</layer-list>
