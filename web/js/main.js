@@ -4,6 +4,7 @@ import { qualityConfig, makeSky } from './gfx.js';
 import { World } from './world.js';
 import { MAPS, MAP_NAMES } from './maps.js';
 import { Effects } from './effects.js';
+import { Grass } from './grass.js';
 import { AudioSys } from './audio.js';
 import { Combat } from './combat.js';
 import { Units } from './units.js';
@@ -165,6 +166,7 @@ class Game {
     $('load-text').textContent = T('Truppen werden aufgestellt …', 'Deploying troops …');
     await new Promise((r) => setTimeout(r, 10));
     this.effects = new Effects(this);
+    try { this.grass = new Grass(this, this.world); } catch (e) { console.warn('Gras', e); this.grass = null; }
     this.combat = new Combat(this);
     this.units = new Units(this);
     this.decals = new Decals(this);
@@ -241,6 +243,7 @@ class Game {
     if (this.missions) this.missions.clear();
     if (this.atmo) this.atmo.dispose();
     if (this.decals) this.decals.dispose();
+    if (this.grass) { this.grass.dispose(); this.grass = null; }
     if (this.effects) { for (const p of [this.effects.smoke, this.effects.fire, this.effects.glow]) this.scene.remove(p.mesh); this.scene.remove(this.effects.tracers.mesh); for (const l of this.effects.lights) this.scene.remove(l.l); for (const l of this.effects.flareLights) this.scene.remove(l); }
     if (this.world) this.world.dispose();
     if (this.playerRig) { this.playerRig.dispose(); this.playerRig = null; }
@@ -556,16 +559,16 @@ class Game {
         if (this.deadT > 3 && !this.missions.over) this.missions.finish(OTHER[p.team], T('Alle Männer gefallen', 'All men lost'));
       } else {
         text += `<p>${T('Sie übernehmen', 'You take over')}: <b>${esc(mate.name)}</b> (${esc(L(CLASSES[mate.role] ? CLASSES[mate.role].name : CLASSES.rifle.name))})</p><p>${Math.max(0, Math.ceil(4 - this.deadT))}</p>`;
-        if (this.deadT > 4) this.takeOver(mate);
+        if (this.deadT > 4) { this.takeOver(mate); return; }
       }
     } else {
       const wait = 8;
       text += `<p>${T('Wiedereinstieg in', 'Respawn in')} ${Math.max(0, Math.ceil(wait - this.deadT))} s</p><div class="clsrow">${PLAYER_CLASSES.map((c, i) => `<button data-c="${c}" class="${this.nextCls === c || (!this.nextCls && c === p.cls) ? 'on' : ''}">${i + 1} ${esc(L(CLASSES[c].name))}</button>`).join('')}</div>`;
       for (let i = 0; i < PLAYER_CLASSES.length; i++) if (this.input.down.has('Digit' + (i + 1))) this.nextCls = PLAYER_CLASSES[i];
-      if (this.deadT > wait) this.respawn();
+      if (this.deadT > wait) { this.respawn(); return; }
     }
     if (this.deadT > 0.8) this.hud.respawn(true, text);
-    if (!this._clsBound) { this._clsBound = true; $('respawn').addEventListener('click', (e) => { const b = e.target.closest('button[data-c]'); if (b) this.nextCls = b.dataset.c; }); }
+    if (!this._clsBound) { this._clsBound = true; $('respawn').addEventListener('pointerdown', (e) => { const b = e.target.closest('button[data-c]'); if (b) { e.preventDefault(); this.nextCls = b.dataset.c; } }); }
   }
 
   takeOver(u) {
@@ -653,6 +656,7 @@ class Game {
       this.sun.position.set(tx + sd.x * 200, cam.position.y - 5 + sd.y * 200, tz + sd.z * 200);
     } else if (this.atmo) { this.sun.position.copy(this.atmo.sunDir).multiplyScalar(200); this.sun.target.position.set(0, 0, 0); }
     if (this.effects) this.effects.update(dt, cam, this.scene.fog ? this.scene.fog.color : new THREE.Color(), this.scene.fog ? this.scene.fog.density : 0, this.atmo ? this.atmo.particleLight : 1);
+    if (this.grass) this.grass.update(dt, cam);
     // Sichtweite: Nebel nimmt mit der Grafikstufe zu
     r.clear();
     r.render(this.scene, cam);
@@ -802,8 +806,9 @@ class Game {
     on('tb-map', () => { this.mapOpen = !this.mapOpen; });
     on('tb-chat', () => this.comms.openChat());
     on('tb-radio', () => { this.radioOpen = !this.radioOpen; this.hud.radioMenu(this.radioOpen, this.radioItems()); });
-    $('radiomenu').addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (b) this.callSupport(+b.dataset.i); });
+    $('radiomenu').addEventListener('pointerdown', (e) => { const b = e.target.closest('button[data-i]'); if (b) { e.preventDefault(); this.callSupport(+b.dataset.i); } });
     on('tb-view', () => { this.thirdPerson = !this.thirdPerson; });
+    $('mapview').addEventListener('pointerdown', () => { this.mapOpen = false; });
     on('tb-score', () => { this.sbOpen = !this.sbOpen; this.hud.scoreboard(this.sbOpen); });
     // Vollbild auf Mobilgeräten
     document.addEventListener('click', () => { if (isMobile) enterFullscreen(); }, { once: true });

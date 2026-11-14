@@ -293,6 +293,28 @@ export class World {
     trunks.forEach((t, i) => { const H = t[4] ? 2.6 : 7 * t[3]; tm.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(t[0], t[1] - 0.5, t[2]), new THREE.Quaternion(), new THREE.Vector3(t[3] * (t[4] ? 0.7 : 1.2), H + 0.5, t[3] * (t[4] ? 0.7 : 1.2)))); });
     tm.count = trunks.length; tm.castShadow = true; this.group.add(tm);
     mk(bushGeo, crowns, (b) => M4(b[0], b[1], b[2], b[4] * 5, 0, 0, b[3]), (b, c) => c.setRGB(0.13 + b[4] * 0.08, 0.22 + b[4] * 0.1, 0.07), this.q.shadows > 0);
+    // Laub-Karten (Blätter mit Lücken) um Büsche und Kronen – wirkt natürlicher als glatte Kugeln
+    if (this.q.trees >= 0.8) {
+      const cards = [];
+      for (let i = 0; i < 7; i++) {
+        const pl = new THREE.PlaneGeometry(1.9, 1.9);
+        pl.rotateY((i / 7) * Math.PI + (i % 2) * 0.4); pl.rotateX((i % 3 - 1) * 0.6);
+        pl.translate((i % 2 ? 0.25 : -0.2), (i % 3 - 1) * 0.2, (i % 2 ? -0.15 : 0.2));
+        cards.push({ geo: pl, color: 0xffffff, matrix: new THREE.Matrix4() });
+      }
+      const merged = mergeColored(cards);
+      // UVs für die Blatttextur übernehmen
+      const uv = []; for (const c of cards) { const u = c.geo.toNonIndexed().attributes.uv; for (let k = 0; k < u.count; k++) uv.push(u.getX(k), u.getY(k)); }
+      merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      const lm = new THREE.MeshLambertMaterial({ map: tex('leaves'), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: false });
+      const all = bushes.map((b) => [b[0], b[1], b[2], b[3] * 1.25, b[4]]).concat(crowns.map((b) => [b[0], b[1], b[2], b[3] * 1.1, b[4]]));
+      const im = new THREE.InstancedMesh(merged, lm, all.length);
+      const c = new THREE.Color();
+      all.forEach((b, i) => { im.setMatrixAt(i, M4(b[0], b[1], b[2], b[4] * 9, 0, 0, b[3])); im.setColorAt(i, c.setRGB(0.75 + b[4] * 0.35, 0.85 + b[4] * 0.3, 0.7)); });
+      im.instanceMatrix.needsUpdate = true;
+      im.receiveShadow = true;
+      this.group.add(im);
+    }
     this.treeTrunks = trees;
     for (const t of trees) if (!t[5]) this.addBox({ x: t[0], z: t[2], hw: 0.35 * t[3] + 0.1, hd: 0.35 * t[3] + 0.1, rot: 0, y0: t[1] - 2, y1: t[1] + 7 * t[3], kind: 'tree' });
   }

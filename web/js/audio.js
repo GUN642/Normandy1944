@@ -20,15 +20,15 @@ export class AudioSys {
     this.sfx = ctx.createGain(); this.sfx.connect(this.master);
     this.amb = ctx.createGain(); this.amb.gain.value = 0.7; this.amb.connect(this.master);
     // Nachhall (synthetische Impulsantwort)
-    this.verbIn = ctx.createGain(); this.verbIn.gain.value = 0.32;
-    try { this.verb = ctx.createConvolver(); this.verb.buffer = this.impulse(2.4, 2.2); this.verbIn.connect(this.verb).connect(this.master); } catch (e) { console.warn('Hall nicht verfügbar', e); }
+    this.verbIn = ctx.createGain(); this.verbIn.gain.value = 0.45;
+    try { this.verb = ctx.createConvolver(); this.verb.buffer = this.impulse(2.2); this.verbIn.connect(this.verb).connect(this.master); } catch (e) { console.warn('Hall nicht verfügbar', e); }
     // Taubheit nach Explosionen: globaler Tiefpass
     this.deaf = ctx.createBiquadFilter(); this.deaf.type = 'lowpass'; this.deaf.frequency.value = 20000;
     this.sfx.disconnect(); this.sfx.connect(this.deaf).connect(this.master);
     this.B = {
-      rifle: this.shot(0.55, 900, 0.9, 0.012), carbine: this.shot(0.4, 1500, 0.6, 0.01), smg45: this.shot(0.28, 700, 0.55, 0.008),
-      smg9: this.shot(0.26, 1100, 0.5, 0.008), stg: this.shot(0.34, 1300, 0.6, 0.009), mg42: this.shot(0.3, 1000, 0.8, 0.008),
-      pistol: this.shot(0.25, 1300, 0.4, 0.007), mg50: this.shot(0.5, 600, 1.0, 0.012), rocket: this.rocketLaunch(), cannon: this.boom(1.2, 0.5),
+      rifle: this.shot(0.7, 1500, 1.0, 0.012, 0.1), carbine: this.shot(0.5, 2000, 0.6, 0.008, 0.18), smg45: this.shot(0.35, 900, 0.7, 0.006, 0.25),
+      smg9: this.shot(0.32, 1500, 0.55, 0.005, 0.28), stg: this.shot(0.4, 1700, 0.75, 0.007, 0.22), mg42: this.shot(0.3, 1300, 0.9, 0.006, 0.12),
+      pistol: this.shot(0.3, 1900, 0.45, 0.005, 0.3), mg50: this.shot(0.5, 600, 1.0, 0.012), rocket: this.rocketLaunch(), cannon: this.boom(1.2, 0.5),
       boom: this.boom(2.6, 1), boomSmall: this.boom(1.4, 0.6), boomBig: this.boom(3.8, 1.4), crack: this.crack(), ping: this.ping(),
       click: this.click(0.02, 5000), bolt: this.bolt(), mag: this.click(0.05, 1800), whistle: this.whistle(), mimi: this.mimi(),
       step: this.click(0.06, 600), thud: this.click(0.12, 220), hit: this.click(0.04, 3000), ring: this.ring(), flak: this.shot(0.3, 800, 0.6, 0.01),
@@ -46,34 +46,60 @@ export class AudioSys {
     if (m > 0) for (let i = 0; i < n; i++) d[i] /= m;
     return b;
   }
-  impulse(sec, decay) {
+  // Freiluft-Hall: frühe Reflexionen (Boden, Hecken), Echos von Häusern/Waldrand, leiser diffuser Ausklang
+  impulse(sec) {
     const n = Math.floor(SR * sec), b = this.ctx.createBuffer(2, n, SR);
-    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay) * (i < SR * 0.01 ? i / (SR * 0.01) : 1); }
+    for (let c = 0; c < 2; c++) {
+      const d = b.getChannelData(c);
+      let lp = 0;
+      for (let i = 0; i < n; i++) { const t = i / SR; lp += ((Math.random() * 2 - 1) - lp) * 0.25; d[i] = lp * 0.22 * Math.exp(-t * 3.2) * Math.min(1, t / 0.02); }
+      const taps = [[0.012, 0.5], [0.031, 0.35], [0.058, 0.28], [0.11, 0.2], [0.19 + c * 0.03, 0.26], [0.34 + c * 0.05, 0.2], [0.52 - c * 0.04, 0.14], [0.8 + c * 0.07, 0.09]];
+      for (const [t0, a] of taps) {
+        let f = 0;
+        for (let i = 0; i < SR * 0.05; i++) { const k = Math.floor((t0 + (Math.random() - 0.5) * 0.004) * SR) + i; if (k >= n) break; f += ((Math.random() * 2 - 1) - f) * (0.35 - t0 * 0.25); d[k] += f * a * Math.exp(-i / (SR * 0.012)); }
+      }
+    }
     return b;
   }
-  // Schuss: Knall (Rauschen, schnell abfallend) + Druckwelle (tiefer Puls) + Nachklang
-  shot(len, body, boom, attack) {
+  // Schuss: Überschallknall + Mündungsknall + Druckwelle + Mechanik + kurzer Bodenhall
+  // body: Klangfarbe (Hz), boom: Druckwelle, len: Dauer, mech: Verschlussgeräusch
+  shot(len, body, boom, attack, mech = 0.15) {
     return this.buf(len, (d, n) => {
-      let lp = 0, lp2 = 0;
-      const k1 = Math.min(0.9, body / 2500);
+      let lp = 0, lp2 = 0, hp = 0, prev = 0;
+      const k1 = Math.min(0.85, body / 2600);
+      const f0 = 70 + body * 0.02;
       for (let i = 0; i < n; i++) {
         const t = i / SR, w = Math.random() * 2 - 1;
-        lp += (w - lp) * k1; lp2 += (lp - lp2) * 0.08;
-        const env = t < attack ? t / attack : Math.exp(-(t - attack) * 38);
-        const tail = Math.exp(-t * 7) * 0.35;
-        const thump = Math.sin(2 * Math.PI * (95 - t * 120) * t) * Math.exp(-t * 28) * boom;
-        d[i] = (w * 0.7 + lp * 0.6) * env + lp2 * tail * 1.4 + thump * 0.8;
+        hp = w - prev; prev = w;
+        lp += (w - lp) * k1; lp2 += (lp - lp2) * 0.06;
+        const crack = hp * Math.exp(-t / 0.0012) * 0.9;                                  // scharfer Knall
+        const blast = lp * Math.exp(-t / (0.018 + attack * 2)) * 1.1;                     // Mündungsknall
+        const thump = Math.sin(2 * Math.PI * (f0 - t * 160) * t) * Math.exp(-t / 0.045) * boom;   // Druckwelle
+        const tail = lp2 * Math.exp(-t / 0.16) * 0.9;                                    // Nachklang
+        d[i] = crack + blast + thump + tail;
       }
+      // Mechanik (Verschluss) kurz nach dem Schuss
+      const m0 = Math.floor(SR * 0.035);
+      for (let i = 0; i < SR * 0.025 && m0 + i < n; i++) { const t = i / SR; d[m0 + i] += (Math.sin(t * 2 * Math.PI * 3100) * 0.6 + (Math.random() * 2 - 1) * 0.4) * Math.exp(-t / 0.004) * mech; }
     });
   }
   boom(len, low) {
     return this.buf(len, (d, n) => {
-      let lp = 0, lp2 = 0;
+      let lp = 0, lp2 = 0, lp3 = 0;
       for (let i = 0; i < n; i++) {
         const t = i / SR, w = Math.random() * 2 - 1;
-        lp += (w - lp) * 0.05; lp2 += (lp - lp2) * 0.04;
-        const env = t < 0.006 ? t / 0.006 : Math.exp(-t * (2.4 / low));
-        d[i] = (lp2 * 4 + lp * 0.8 + w * Math.exp(-t * 40) * 0.6) * env + Math.sin(t * 2 * Math.PI * (45 - t * 18)) * Math.exp(-t * 3) * 0.6;
+        lp += (w - lp) * 0.08; lp2 += (lp - lp2) * 0.03; lp3 += (lp2 - lp3) * 0.02;
+        const crack = w * Math.exp(-t / 0.004) * 0.8;
+        const body = lp * Math.exp(-t / (0.08 * low)) * 1.2;
+        const sub = Math.sin(2 * Math.PI * (48 - t * 22) * t) * Math.exp(-t / (0.25 * low)) * 1.3;
+        const rumble = lp3 * 6 * Math.exp(-t / (0.7 * low)) * Math.min(1, t / 0.05);
+        d[i] = crack + body + sub + rumble;
+      }
+      // herabfallendes Erdreich / Splitter
+      for (let k = 0; k < 40 * low; k++) {
+        const t0 = 0.25 + Math.random() * (0.9 + low * 0.5), a = Math.random() * 0.12;
+        const s0 = Math.floor(t0 * SR);
+        for (let i = 0; i < SR * 0.012 && s0 + i < n; i++) d[s0 + i] += (Math.random() * 2 - 1) * a * Math.exp(-i / (SR * 0.002));
       }
     });
   }

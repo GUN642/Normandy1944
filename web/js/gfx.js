@@ -226,10 +226,14 @@ export function tex(name) {
     case 'leaves':     // Hecken-/Baumlaub mit Lücken (Alpha)
       t = canvasTex(128, (c, s) => {
         c.clearRect(0, 0, s, s);
-        for (let i = 0; i < 900; i++) {
-          const v = 50 + rnd() * 70 | 0;
-          c.fillStyle = `rgba(${v * 0.55 | 0},${v},${v * 0.35 | 0},${0.85})`;
-          c.beginPath(); c.ellipse(rnd() * s, rnd() * s, 2 + rnd() * 4, 1.2 + rnd() * 2.5, rnd() * 3, 0, 7); c.fill();
+        // Blätter dicht in der Mitte, zum Rand ausdünnend (Silhouette)
+        for (let i = 0; i < 1400; i++) {
+          const a = rnd() * 6.28, r = Math.sqrt(rnd()) * s * 0.5;
+          const x = s / 2 + Math.cos(a) * r, y = s / 2 + Math.sin(a) * r;
+          const v = 55 + rnd() * 75 | 0;
+          c.fillStyle = `rgba(${v * 0.55 | 0},${v},${v * 0.32 | 0},1)`;
+          c.beginPath(); c.ellipse(x, y, 2.2 + rnd() * 3.5, 1.1 + rnd() * 1.8, rnd() * 3, 0, 7); c.fill();
+          if (rnd() < 0.15) { c.fillStyle = 'rgba(30,40,20,1)'; c.fillRect(x, y, 1, 3); }
         }
       });
       break;

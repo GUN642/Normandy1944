@@ -239,3 +239,7 @@ body.touchmode #feed { top: 136px; }
   .title h1 { font-size: 30px; }
 }
 .screen, .screen * { touch-action: pan-y; }
+
+/* Overlays liegen über der Touch-Fläche, damit ihre Knöpfe bedienbar sind */
+#respawn, #radiomenu, #scoreboard, #chat-box, #mapview { z-index: 10; }
+#mapview { pointer-events: auto; }

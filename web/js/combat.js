@@ -83,7 +83,9 @@ export class Combat {
       const head = ent.stance !== 2 && rel > top - 0.3;
       best = t; hit = { ent, kind, head, t, y: qy };
     };
-    for (const u of g.units.list) if (u.alive && (!owner || u.uid !== owner.uid)) test(u, 'unit');
+    // KI-Geschosse treffen keine eigenen Kameraden (die KI achtet auf ihre Schusslinie)
+    const aiShot = owner && (owner.uid || owner.tank);
+    for (const u of g.units.list) if (u.alive && (!owner || u.uid !== owner.uid) && !(aiShot && u.team === owner.team)) test(u, 'unit');
     if (g.player.alive && !(owner && owner.local)) test(g.player, 'player');
     for (const [pid, av] of g.avatars) if (av.alive && av.visible && (!owner || owner.pid !== pid)) test(av, 'avatar');
     for (const tk of g.units.tanks) {

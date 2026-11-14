@@ -62,37 +62,66 @@ function soldierParts(uni) {
   const key = JSON.stringify(uni);
   if (SOLDIER_CACHE.has(key)) return SOLDIER_CACHE.get(key);
   const U = uni;
+  const cap = (r, l, sx = 1, sz = 1) => { const g = new THREE.CapsuleGeometry(r, l, 3, 10); g.scale(sx, 1, sz); return g; };
+  const de = !!(U.stiefel || U.fj);
+  // Rumpf: abgerundet, Jacke mit Schößen, Kragen, Koppel, Taschen
   const torso = [
-    { geo: geo.box(0.38, 0.5, 0.22), color: U.jacket, matrix: M4(0, 0.25, 0) },
-    { geo: geo.box(0.4, 0.07, 0.24), color: U.web, matrix: M4(0, 0.02, 0) },                   // Koppel
-    { geo: geo.box(0.06, 0.5, 0.235), color: U.web, matrix: M4(0.1, 0.27, 0, 0, 0, 0.12) },    // Trageriemen
-    { geo: geo.box(0.06, 0.5, 0.235), color: U.web, matrix: M4(-0.1, 0.27, 0, 0, 0, -0.12) },
-    { geo: geo.box(0.3, 0.32, 0.14), color: U.pack, matrix: M4(0, 0.3, 0.17) },                // Gepäck
-    { geo: geo.box(0.1, 0.06, 0.12), color: U.skin, matrix: M4(0, 0.53, -0.01) },              // Hals
+    { geo: cap(0.165, 0.3, 1.08, 0.66), color: U.jacket, matrix: M4(0, 0.29, 0) },
+    { geo: geo.cyl(0.19, 0.2, 0.16, 12), color: U.jacket, matrix: M4s(0, 0.02, 0, 0, 1, 1, 0.68) },          // Jackenschöße
+    { geo: geo.cyl(0.07, 0.085, 0.07, 10), color: U.jacket, matrix: M4(0, 0.535, -0.005) },                      // Kragen
+    { geo: geo.cyl(0.183, 0.183, 0.055, 12), color: U.web, matrix: M4s(0, 0.075, 0, 0, 1, 1, 0.7) },          // Koppel
+    { geo: geo.box(0.05, 0.045, 0.02), color: de ? 0x8a8a80 : 0x9a8a5a, matrix: M4(0, 0.075, -0.13) },        // Koppelschloss
+    { geo: geo.box(0.05, 0.42, 0.02), color: U.web, matrix: M4(0.09, 0.32, -0.112, 0, 0, 0.1) },               // Trageriemen vorn
+    { geo: geo.box(0.05, 0.42, 0.02), color: U.web, matrix: M4(-0.09, 0.32, -0.112, 0, 0, -0.1) },
+    { geo: geo.box(0.07, 0.07, 0.02), color: U.jacket, matrix: M4(0.085, 0.36, -0.118) },                      // Brusttaschen
+    { geo: geo.box(0.07, 0.07, 0.02), color: U.jacket, matrix: M4(-0.085, 0.36, -0.118) },
+    { geo: geo.box(0.26, 0.3, 0.12), color: U.pack, matrix: M4(0, 0.32, 0.16) },                                // Gepäck
+    { geo: geo.cyl(0.06, 0.06, 0.26, 8), color: U.pack, matrix: M4(0, 0.5, 0.17, 0, 0, Math.PI / 2) },          // Deckenrolle
+    { geo: geo.cyl(0.055, 0.06, 0.08, 10), color: U.skin, matrix: M4(0, 0.585, -0.01) },                        // Hals
   ];
-  if (U.stiefel || U.fj) {
-    // Brotbeutel + geriffelte Gasmaskenbüchse (typische deutsche Silhouette)
-    torso.push({ geo: geo.box(0.16, 0.16, 0.08), color: 0x6c6146, matrix: M4(-0.17, 0.0, 0.1) });
-    torso.push({ geo: geo.cyl(0.055, 0.055, 0.26, 10), color: 0x5a6150, matrix: M4(0.12, 0.05, 0.2, 0, 0, 0.15) });
-    torso.push({ geo: geo.box(0.11, 0.1, 0.06), color: 0x1d1a17, matrix: M4(0.11, 0.06, -0.13) });   // Patronentaschen
-    torso.push({ geo: geo.box(0.11, 0.1, 0.06), color: 0x1d1a17, matrix: M4(-0.11, 0.06, -0.13) });
+  if (de) {
+    torso.push({ geo: geo.box(0.17, 0.15, 0.07), color: 0x6c6146, matrix: M4(-0.17, 0.0, 0.1) });               // Brotbeutel
+    const gm = geo.cyl(0.055, 0.055, 0.27, 12); gm.rotateZ(0.15);
+    torso.push({ geo: gm, color: 0x5a6150, matrix: M4(0.12, 0.04, 0.21) });                                      // Gasmaskenbüchse
+    for (let k = 0; k < 4; k++) torso.push({ geo: geo.cyl(0.058, 0.058, 0.01, 12), color: 0x4a5144, matrix: M4(0.12 + Math.sin(0.15) * (k - 1.5) * 0.06, 0.04 + (k - 1.5) * 0.06, 0.21) });
+    for (const sx of [-1, 1]) torso.push({ geo: geo.box(0.1, 0.09, 0.055), color: 0x1d1a17, matrix: M4(sx * 0.1, 0.12, -0.135) });   // Patronentaschen
+    torso.push({ geo: geo.cyl(0.07, 0.07, 0.12, 10), color: 0x4c4a3a, matrix: M4(0.16, 0.2, 0.16, 0, Math.PI / 2) });                  // Kochgeschirr
+    torso.push({ geo: geo.box(0.05, 0.2, 0.04), color: 0x3a2a1a, matrix: M4(-0.19, 0.0, 0.0) });                // Spaten
   } else {
-    torso.push({ geo: geo.cyl(0.05, 0.05, 0.16, 8), color: 0x6a6a52, matrix: M4(-0.2, -0.02, 0.06) });   // Feldflasche
-    torso.push({ geo: geo.box(0.36, 0.08, 0.06), color: U.web, matrix: M4(0, 0.04, -0.13) });             // Patronengurt
-    torso.push({ geo: geo.box(0.06, 0.14, 0.04), color: 0x5a5a40, matrix: M4(0.17, 0.0, 0.0) });          // Spaten
+    for (let k = 0; k < 5; k++) torso.push({ geo: geo.box(0.055, 0.07, 0.04), color: U.web, matrix: M4(-0.14 + k * 0.07, 0.07, -0.14) });  // Patronengurt-Taschen
+    torso.push({ geo: geo.cyl(0.05, 0.05, 0.16, 10), color: 0x5e5e46, matrix: M4(-0.2, -0.0, 0.06) });         // Feldflasche
+    torso.push({ geo: geo.box(0.06, 0.16, 0.04), color: 0x5a5a40, matrix: M4(0.19, -0.01, 0.04) });             // Spaten
+    torso.push({ geo: geo.box(0.04, 0.12, 0.03), color: 0x3a3a30, matrix: M4(0.17, 0.42, -0.1, 0, 0, 0.3) });   // Verbandpäckchen am Riemen
   }
   if (U.diamond) torso.push({ geo: geo.box(0.02, 0.06, 0.12), color: U.diamond, matrix: M4(0, 0.36, 0.25) });
+  // Kopf mit Gesicht
   const head = [
-    { geo: geo.sph(0.11, 12, 10), color: U.skin, matrix: M4(0, 0.1, 0) },
-    { geo: geo.box(0.03, 0.04, 0.04), color: U.skin, matrix: M4(0, 0.09, -0.11) },
-    { geo: helmetGeo(U.fj ? 'fj' : U.stiefel ? 'stahl' : 'm1'), color: U.helmet, matrix: M4(0, 0.13, 0) },
-    { geo: geo.box(0.16, 0.02, 0.015), color: 0x2a2a2a, matrix: M4(0, 0.035, -0.07) },    // Kinnriemen
+    { geo: geo.sph(0.1, 14, 12), color: U.skin, matrix: M4s(0, 0.1, 0, 0, 0.93, 1.1, 1) },
+    { geo: geo.box(0.026, 0.045, 0.035), color: U.skin, matrix: M4(0, 0.095, -0.097, 0, 0.25) },                 // Nase
+    { geo: geo.box(0.022, 0.01, 0.01), color: 0x2a2018, matrix: M4(0.035, 0.125, -0.092) },                       // Augen
+    { geo: geo.box(0.022, 0.01, 0.01), color: 0x2a2018, matrix: M4(-0.035, 0.125, -0.092) },
+    { geo: geo.box(0.03, 0.007, 0.008), color: 0x5a3a2a, matrix: M4(0.035, 0.142, -0.094) },                      // Brauen
+    { geo: geo.box(0.03, 0.007, 0.008), color: 0x5a3a2a, matrix: M4(-0.035, 0.142, -0.094) },
+    { geo: geo.box(0.04, 0.008, 0.01), color: 0x7a4a3a, matrix: M4(0, 0.055, -0.093) },                           // Mund
+    { geo: geo.sph(0.022, 6, 5), color: U.skin, matrix: M4s(0.095, 0.105, 0.0, 0, 0.5, 1, 0.8) },                // Ohren
+    { geo: geo.sph(0.022, 6, 5), color: U.skin, matrix: M4s(-0.095, 0.105, 0.0, 0, 0.5, 1, 0.8) },
+    { geo: helmetGeo(U.fj ? 'fj' : U.stiefel ? 'stahl' : 'm1'), color: U.helmet, matrix: M4(0, 0.135, 0.005) },
+    { geo: geo.box(0.17, 0.012, 0.012), color: 0x2a2a2a, matrix: M4(0, 0.03, -0.06) },                             // Kinnriemen
   ];
-  if (U.net) head.push({ geo: geo.sph(0.15, 8, 5), color: 0x3d3f2a, matrix: M4s(0, 0.17, 0, 0, 1, 0.6, 1) });
-  const upperArm = [{ geo: geo.box(0.1, 0.3, 0.1), color: U.jacket, matrix: M4(0, -0.15, 0) }];
-  const foreArm = [{ geo: geo.box(0.085, 0.27, 0.085), color: U.jacket, matrix: M4(0, -0.12, 0) }, { geo: geo.box(0.07, 0.08, 0.09), color: U.skin, matrix: M4(0, -0.28, 0) }];
-  const thigh = [{ geo: geo.box(0.15, 0.44, 0.16), color: U.pants, matrix: M4(0, -0.22, 0) }];
-  const shin = [{ geo: geo.box(0.12, 0.42, 0.13), color: U.legs, matrix: M4(0, -0.2, 0) }, { geo: geo.box(0.12, 0.08, 0.24), color: U.boots, matrix: M4(0, -0.42, -0.04) }];
+  if (U.net) head.push({ geo: geo.sph(0.152, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), color: 0x3d3f2a, matrix: M4s(0, 0.15, 0.005, 0, 1, 0.75, 1) });
+  const upperArm = [{ geo: cap(0.052, 0.22), color: U.jacket, matrix: M4(0, -0.15, 0) }];
+  const foreArm = [
+    { geo: cap(0.046, 0.19), color: U.jacket, matrix: M4(0, -0.13, 0) },
+    { geo: geo.cyl(0.05, 0.05, 0.03, 10), color: U.jacket, matrix: M4(0, -0.24, 0) },                             // Ärmelaufschlag
+    { geo: cap(0.035, 0.05, 1.1, 0.75), color: U.skin, matrix: M4(0, -0.29, -0.005) },                            // Hand
+  ];
+  const thigh = [{ geo: cap(0.078, 0.3), color: U.pants, matrix: M4(0, -0.22, 0) }];
+  if (U.net || U.fj) thigh.push({ geo: geo.box(0.05, 0.13, 0.11), color: U.pants, matrix: M4(0.075, -0.22, -0.01) });   // Beintasche (Fallschirmjäger)
+  const shin = [{ geo: cap(0.062, 0.28), color: U.legs, matrix: M4(0, -0.2, 0) }];
+  if (U.stiefel) shin.push({ geo: geo.cyl(0.072, 0.066, 0.3, 10), color: 0x1a1918, matrix: M4(0, -0.27, 0) });   // Marschstiefel
+  else shin.push({ geo: geo.cyl(0.07, 0.068, 0.17, 10), color: U.legs === U.pants ? U.boots : 0xa69a74, matrix: M4(0, -0.33, 0) });   // Gamaschen / Springerstiefel
+  shin.push({ geo: geo.box(0.11, 0.07, 0.2), color: U.boots, matrix: M4(0, -0.43, -0.035) });
+  shin.push({ geo: geo.sph(0.056, 8, 6), color: U.boots, matrix: M4s(0, -0.43, -0.13, 0, 1, 0.65, 1) });         // Stiefelspitze
   const parts = {};
   for (const [k, v] of Object.entries({ torso, head, upperArm, foreArm, thigh, shin })) parts[k] = mergeColored(v);
   // Fernansicht: eine einzige Figur

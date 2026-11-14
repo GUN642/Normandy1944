@@ -141,6 +141,25 @@ export class Atmosphere {
       this.visibility = lit ? 160 : 75;
     }
 
+    // Ferner Gefechtslärm: Gewehrschüsse, MG-Feuerstöße und MP-Salven aus wechselnden Richtungen
+    T0.small = (T0.small ?? 1) - dt;
+    if (T0.small <= 0) {
+      const busy = 0.4 + (this.amb.arty || 0.3);
+      T0.small = (0.25 + rand() * 1.6) / busy;
+      if (!this.front || rand() < 0.05) this.front = rand() * Math.PI * 2;   // Hauptrichtung des fernen Gefechts
+      const a = this.front + (rand() - 0.5) * 2.2, d = 250 + rand() * 650;
+      const p = new THREE.Vector3(cam.x + Math.cos(a) * d, cam.y, cam.z + Math.sin(a) * d);
+      const r = rand();
+      const de = rand() < 0.5;
+      if (r < 0.22) {   // MG-Feuerstoß
+        const n = 5 + (rand() * 14 | 0), iv = de ? 0.05 : 0.11;
+        for (let i = 0; i < n; i++) g.audio.play(de ? 'mg42' : 'rifle', p, 0.55, 0.95 + rand() * 0.08, { far: 1400, delay: i * iv, verb: true });
+      } else if (r < 0.35) {
+        const n = 3 + (rand() * 6 | 0);
+        for (let i = 0; i < n; i++) g.audio.play(de ? 'smg9' : 'smg45', p, 0.45, 1, { far: 1100, delay: i * 0.1 });
+      } else g.audio.play(rand() < 0.5 ? 'rifle' : 'carbine', p, 0.6, 0.9 + rand() * 0.15, { far: 1400 });
+    }
+
     // Ferne Artillerie: Mündungsblitze am Horizont, Grollen
     T0.distant -= dt;
     if (T0.distant <= 0) {

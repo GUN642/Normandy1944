@@ -60,7 +60,9 @@ class ViewModel {
     const ud = this.model.userData;
     // Hüftanschlag vs. Zielen über Kimme und Korn
     const hip = W.grenade ? [0.2, -0.24, -0.38] : W.pistol ? [0.17, -0.19, -0.4] : W.rocket ? [0.19, -0.14, -0.3] : [0.19, -0.205, -0.3];
-    const aim = [0, -ud.sightY, -(ud.sightZ || 0.05) - 0.17];
+    // Anschlag: Kimme auf Augenhöhe, Kolbenende knapp vor der Kamera (sonst füllt der Kolben das Bild)
+    const butt = W.pistol || W.grenade ? 0 : W.rocket ? 0.8 : 0.6;
+    const aim = [0, -ud.sightY, -Math.max((ud.sightZ || 0.05) + 0.17, butt + 0.04)];
     const x = hip[0] + (aim[0] - hip[0]) * ads + Math.sin(this.t) * 0.012 * bobA;
     const y = hip[1] + (aim[1] - hip[1]) * ads + Math.abs(Math.cos(this.t)) * 0.01 * bobA - this.swap * 0.25 - (p.reloading ? 0.08 : 0) + p.sway.y * 0.02;
     const z = hip[2] + (aim[2] - hip[2]) * ads + this.kick * 0.06;
