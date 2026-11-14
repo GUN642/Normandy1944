@@ -283,7 +283,18 @@ export function buildHouse(x, z, y, w, d, floors, ry, opts = {}) {
   } else {
     walls.push({ geo: boxUV(w + 0.2, 0.4, d + 0.2), color: 0xd0c8b8, matrix: T(0, H, 0) });
   }
-  // Fenster und Türen (dunkle Öffnungen mit Läden)
+  // Fenster: Glas mit Sprossenkreuz, Rahmen, Fensterbank, Sturz, Klappläden; Türen mit Steingewände
+  const frameC = 0xd2c9b4, stoneC = 0xbdb5a3;
+  const win = (cx, cy, cz, rot) => {
+    const W = (gx, gy, gz, lx, ly, lz, c, list = wood) => list.push({ geo: geo.box(gx, gy, gz), color: c, matrix: T(cx, cy, cz, rot).multiply(M4(lx, ly, lz)) });
+    W(0.86, 1.26, 0.03, 0, 0, 0.0, 0x24303a, dark);                // Glas
+    W(0.07, 1.34, 0.06, -0.46, 0, 0.03, frameC); W(0.07, 1.34, 0.06, 0.46, 0, 0.03, frameC);
+    W(0.99, 0.07, 0.06, 0, 0.66, 0.03, frameC); W(0.99, 0.07, 0.06, 0, -0.66, 0.03, frameC);
+    W(0.035, 1.26, 0.04, 0, 0, 0.03, frameC); W(0.86, 0.035, 0.04, 0, 0.12, 0.03, frameC);   // Sprossen
+    W(1.12, 0.08, 0.2, 0, -0.73, 0.07, stoneC);                     // Fensterbank
+    W(1.15, 0.17, 0.06, 0, 0.78, 0.03, stoneC);                     // Sturz
+    for (const sd of [-1, 1]) W(0.45, 1.35, 0.05, sd * 0.72, 0, 0.06, opts.shutter || 0x5d6e66);   // Klappläden
+  };
   const nx = Math.max(1, Math.floor(w / 3.2)), nz = Math.max(1, Math.floor(d / 3.4));
   for (let f = 0; f < floors; f++) {
     const wy = f * 3 + 1.6;
@@ -291,17 +302,31 @@ export function buildHouse(x, z, y, w, d, floors, ry, opts = {}) {
       const lx = -w / 2 + (i + 0.5) * (w / nx);
       for (const sz of [-1, 1]) {
         const door = f === 0 && i === Math.floor(nx / 2) && sz === -1;
-        const hh = door ? 2.2 : 1.3, cy = door ? 1.0 : wy;
-        dark.push({ geo: geo.box(door ? 1.1 : 0.9, hh, 0.06), color: 0x0d0c0b, matrix: T(lx, cy, sz * (d / 2 + 0.02)) });
-        if (!door) for (const s of [-1, 1]) wood.push({ geo: geo.box(0.45, 1.35, 0.05), color: opts.shutter || 0x5d6e66, matrix: T(lx + s * 0.7, wy, sz * (d / 2 + 0.05)) });
-        else wood.push({ geo: geo.box(1.1, 2.2, 0.05), color: 0x4a3423, matrix: T(lx + 0.45, 1.0, sz * (d / 2 + 0.06), 0.9) });
+        const rot = sz > 0 ? 0 : Math.PI;
+        if (door) {
+          const D = (gx, gy, gz, llx, ly, lz, c, list = wood) => list.push({ geo: geo.box(gx, gy, gz), color: c, matrix: T(lx, 0, sz * (d / 2), rot).multiply(M4(llx, ly, lz)) });
+          D(1.1, 2.2, 0.06, 0, 1.0, 0.0, 0x0d0c0b, dark);
+          D(0.18, 2.4, 0.08, -0.64, 1.1, 0.03, stoneC); D(0.18, 2.4, 0.08, 0.64, 1.1, 0.03, stoneC); D(1.46, 0.2, 0.08, 0, 2.28, 0.03, stoneC);   // Gewände
+          D(1.0, 0.12, 0.35, 0, -0.14, 0.15, stoneC);                    // Schwelle
+          wood.push({ geo: geo.box(1.0, 2.1, 0.05), color: 0x4a3423, matrix: T(lx, 0, sz * (d / 2), rot).multiply(M4(0.5 + Math.cos(0.9) * 0, 1.0, 0.0)).multiply(M4(0.0, 0, 0, 0)).multiply(new THREE.Matrix4().makeTranslation(0.45, 0, 0.35)).multiply(new THREE.Matrix4().makeRotationY(-0.9)) });
+        } else win(lx, wy, sz * (d / 2 + 0.02), rot);
       }
     }
     for (let i = 0; i < nz; i++) {
       const lz = -d / 2 + (i + 0.5) * (d / nz);
-      for (const sx of [-1, 1]) dark.push({ geo: geo.box(0.06, 1.2, 0.85), color: 0x0d0c0b, matrix: T(sx * (w / 2 + 0.02), wy, lz) });
+      for (const sx of [-1, 1]) win(sx * (w / 2 + 0.02), wy, lz, sx * Math.PI / 2);
     }
   }
+  // Ecksteine (Quader an den Hauskanten, abwechselnd lang/kurz)
+  for (let k = 0, y = 0; y < H - 0.5; k++, y += 0.42) {
+    const L = k % 2 ? 0.42 : 0.26;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      wood.push({ geo: geo.box(L, 0.36, 0.05), color: 0xc4bcac, matrix: T(sx * (w / 2 - L / 2 + 0.02), y + 0.1, sz * (d / 2 + 0.02)) });
+      wood.push({ geo: geo.box(0.04, 0.36, k % 2 ? 0.26 : 0.42), color: 0xc4bcac, matrix: T(sx * (w / 2 + 0.02), y + 0.1, sz * (d / 2 - (k % 2 ? 0.13 : 0.21) + 0.02)) });
+    }
+  }
+  // Sockel
+  wood.push({ geo: geo.box(w + 0.12, 0.45, d + 0.12), color: 0x8f877a, matrix: T(0, -0.1, 0) });
   const meshes = [];
   const wm = new THREE.Mesh(mergeTextured(walls), opts.plaster ? MAT.plaster : MAT.stone);
   const roofMat = opts.tiles ? MAT.tile : MAT.slate;
@@ -469,6 +494,35 @@ export function buildTank(type) {
   gun.push({ geo: gg, color: 0x34352e, matrix: M4(0, 0, -gl / 2) });
   gun.push({ geo: geo.box(0.5, 0.4, 0.5), color: col, matrix: M4(0, 0, 0) });
   if (type === 'pz4' || type === 'stug') { const mb = geo.cyl(S.gunR * 1.8, S.gunR * 1.8, 0.35, 8); mb.rotateX(Math.PI / 2); gun.push({ geo: mb, color: 0x34352e, matrix: M4(0, 0, -gl) }); }
+  // Laufwerksdetails: Kettenoberlauf mit Gliedern, Antriebsrad vorn, Leitrad hinten, Stützrollen
+  for (const sx of [-1, 1]) {
+    const X = sx * (W / 2 - 0.28);
+    for (let k = 0; k < Math.round(L * 3.2); k++) hull.push({ geo: geo.box(0.58, 0.05, 0.12), color: 0x24221f, matrix: M4(X, 0.9, -L * 0.46 + k * (L * 0.92 / Math.round(L * 3.2))) });
+    for (let k = 0; k < Math.round(L * 3.2); k++) hull.push({ geo: geo.box(0.58, 0.05, 0.12), color: 0x24221f, matrix: M4(X, 0.04, -L * 0.42 + k * (L * 0.84 / Math.round(L * 3.2))) });
+    const spr = geo.cyl(0.36, 0.36, 0.2, 12); spr.rotateZ(Math.PI / 2);
+    hull.push({ geo: spr, color: 0x3c3a34, matrix: M4(sx * (W / 2 - 0.12), 0.62, -L * 0.45) });
+    const idl = geo.cyl(0.3, 0.3, 0.18, 12); idl.rotateZ(Math.PI / 2);
+    hull.push({ geo: idl, color: 0x3c3a34, matrix: M4(sx * (W / 2 - 0.12), 0.55, L * 0.45) });
+    for (let k = 0; k < 3; k++) { const rr = geo.cyl(0.09, 0.09, 0.12, 8); rr.rotateZ(Math.PI / 2); hull.push({ geo: rr, color: 0x3a3a36, matrix: M4(sx * (W / 2 - 0.05), 0.82, -L * 0.25 + k * L * 0.25) }); }
+    if (type === 'sherman') for (let k = 0; k < 3; k++) hull.push({ geo: geo.box(0.22, 0.42, 0.9), color: col, matrix: M4(sx * (W / 2 - 0.05), 0.48, -L * 0.3 + k * L * 0.3) });   // VVSS-Drehgestelle
+    // Werkzeug und Ersatzkettenglieder an der Wanne
+    hull.push({ geo: geo.cyl(0.03, 0.03, 1.6, 6), color: 0x5a4632, matrix: M4(sx * (W * 0.36), 1.36 + H * 0.05, 0.6, 0, Math.PI / 2) });
+    for (let k = 0; k < 3; k++) hull.push({ geo: geo.box(0.35, 0.05, 0.14), color: 0x2a2826, matrix: M4(sx * 0.4, 1.12 + H * 0.12, -L * 0.47 - 0.02 - k * 0.0, 0, 1.1) });
+  }
+  // Luken, Bug-MG, Auspuff
+  hull.push({ geo: geo.cyl(0.3, 0.3, 0.06, 10), color: col, matrix: M4(-0.45, type === 'sherman' ? 1.62 : 1.62, -L * 0.28) });
+  hull.push({ geo: geo.cyl(0.3, 0.3, 0.06, 10), color: col, matrix: M4(0.45, type === 'sherman' ? 1.62 : 1.62, -L * 0.28) });
+  { const bmg = geo.cyl(0.025, 0.03, 0.5, 6); bmg.rotateX(Math.PI / 2); hull.push({ geo: bmg, color: 0x222222, matrix: M4(0.55, 1.25, -L * 0.48) }); }
+  for (const sx of [-0.5, 0.5]) hull.push({ geo: geo.cyl(0.09, 0.09, 0.4, 8), color: 0x3a2e24, matrix: M4(sx * W * 0.5, 1.15, L * 0.47, 0, Math.PI / 2) });
+  if (!S.casemate) {
+    // Turm: Blende, Luke, Fla-MG / Antenne
+    turret.push({ geo: geo.box(0.9, 0.55, 0.25), color: col, matrix: M4(0, 0.35, -S.turretR * 0.95) });
+    turret.push({ geo: geo.cyl(0.26, 0.26, 0.05, 10), color: col, matrix: M4(0.3, 1.02, 0.2) });
+    turret.push({ geo: geo.cyl(0.01, 0.01, 2.2, 4), color: 0x222222, matrix: M4(-0.5, 1.75, 0.5) });
+    if (type === 'sherman') { const mg = geo.cyl(0.02, 0.025, 0.9, 6); mg.rotateX(Math.PI / 2); turret.push({ geo: mg, color: 0x222222, matrix: M4(0.3, 1.18, -0.1) }); }
+  } else {
+    hull.push({ geo: geo.box(0.9, 0.5, 0.3), color: col, matrix: M4(0, 1.7, -L * 0.27) });   // Topfblende StuG
+  }
   // Hoheitsabzeichen: weißer Stern (US) bzw. Balkenkreuz (DE)
   const mark = [];
   if (S.star) { mark.push({ geo: geo.cyl(0.42, 0.42, 0.02, 5), color: 0xe8e4d8, matrix: M4(W / 2 - 0.02, 1.3, 0.3, 0, 0, Math.PI / 2) }); mark.push({ geo: geo.cyl(0.42, 0.42, 0.02, 5), color: 0xe8e4d8, matrix: M4(-W / 2 + 0.02, 1.3, 0.3, 0, 0, Math.PI / 2) }); }

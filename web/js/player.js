@@ -102,7 +102,7 @@ export class Player {
     const lo = loadout(cls, team);
     this.weapons = lo.slice();
     this.ammo = {};
-    for (const id of this.weapons) { const W = WEAPONS[id]; this.ammo[id] = { mag: W.grenade ? 0 : W.mag, res: W.grenade ? (CLASSES[cls].nade || 2) : W.reserve }; }
+    for (const id of this.weapons) { const W = WEAPONS[id]; this.ammo[id] = { mag: W.grenade ? 0 : W.mag, res: W.grenade ? (W.smoke ? 1 : CLASSES[cls].nade || 2) : W.reserve }; }
     this.cur = 0;
     this.hp = 100; this.alive = true;
     this.stance = 0; this.ads = 0; this.speed = 0;
@@ -297,9 +297,9 @@ export class Player {
     const W = this.W, A = this.ammo[this.wid];
     const swim = g.world.waterDepth(this.pos.x, this.pos.z) > 1.45;
     // Waffenwahl
-    for (let i = 0; i < 4; i++) if (inp.pressed('w' + (i + 1))) this.select(i);
+    for (let i = 0; i < 5; i++) if (inp.pressed('w' + (i + 1))) this.select(i);
     if (inp.pressed('wnext')) this.select((this.cur + 1) % this.weapons.length);
-    if (inp.pressed('grenade')) { const gi = this.weapons.findIndex((w) => WEAPONS[w].grenade); if (gi >= 0 && this.ammo[this.weapons[gi]].res > 0) { this.prevW = this.cur; this.select(gi); this.quickNade = true; } }
+    if (inp.pressed('grenade')) { const gi = this.weapons.findIndex((w) => WEAPONS[w].grenade && !WEAPONS[w].smoke); if (gi >= 0 && this.ammo[this.weapons[gi]].res > 0) { this.prevW = this.cur; this.select(gi); this.quickNade = true; } }
     // Zielen
     const wantAds = inp.held('aim') && !this.sprinting && !W.grenade && this.reloading <= 0 && !swim;
     this.ads = clamp(this.ads + (wantAds ? dt * 6 : -dt * 7), 0, 1);

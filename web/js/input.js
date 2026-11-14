@@ -20,6 +20,7 @@ export const BIND_DEFS = [
   { id: 'w1', de: 'Hauptwaffe', en: 'Primary', def: ['Digit1'] },
   { id: 'w2', de: 'Pistole / Zweitwaffe', en: 'Sidearm', def: ['Digit2'] },
   { id: 'w3', de: 'Granaten', en: 'Grenades', def: ['Digit3'] },
+  { id: 'w4', de: 'Rauchgranate', en: 'Smoke grenade', def: ['Digit4'] },
   { id: 'use', de: 'Benutzen (Sprengladung, Flagge, Seil)', en: 'Use (charge, flag, rope)', def: ['KeyE'] },
   { id: 'heal', de: 'Verband anlegen', en: 'Apply bandage', def: ['KeyH'] },
   { g: { de: 'Funk und Mehrspieler', en: 'Radio and multiplayer' } },

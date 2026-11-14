@@ -334,7 +334,7 @@ export class Atmosphere {
     } else if (kind === 'nw') {
       this.nebelwerferAt(p, owner);
     } else if (kind === 'smoke') {
-      for (let i = 0; i < 5; i++) setTimeout(() => { if (g.world) g.effects.smokeGrenade(p.x + (rand() - 0.5) * 40, g.world.h(p.x, p.z), p.z + (rand() - 0.5) * 40); }, 6000 + i * 500);
+      for (let i = 0; i < 5; i++) setTimeout(() => { if (!g.world) return; const sx = p.x + (rand() - 0.5) * 40, sz = p.z + (rand() - 0.5) * 40; const sp = new THREE.Vector3(sx, g.world.h(sx, sz), sz); g.effects.smokeGrenade(sp.x, sp.y, sp.z); g.addSmoke(sp); }, 6000 + i * 500);
       if (g.net && g.net.isHost) g.net.send({ t: 'smk', p: [p.x, p.z] });
     } else if (kind === 'air') {
       // P-47 im Tiefflug: Bordwaffen + zwei 500-lb-Bomben

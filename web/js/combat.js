@@ -47,11 +47,12 @@ export class Combat {
   grenade(o, vel, fuse, owner, auth, kind = 'mk2') {
     const W = WEAPONS[kind] || WEAPONS.mk2;
     let m;
-    if (kind === 'stiel') { m = new THREE.Group(); const s = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.28, 6), new THREE.MeshLambertMaterial({ color: 0x6b4226 })); const h = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.075, 8), this.nadeMat); h.position.y = 0.17; m.add(s, h); }
+    if (W.smoke) m = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.115, 8), new THREE.MeshLambertMaterial({ color: kind === 'nb39' ? 0x6b6f63 : 0x9a9a8a }));
+    else if (kind === 'stiel') { m = new THREE.Group(); const s = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.28, 6), new THREE.MeshLambertMaterial({ color: 0x6b4226 })); const h = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.075, 8), this.nadeMat); h.position.y = 0.17; m.add(s, h); }
     else m = new THREE.Mesh(this.nadeGeo, this.nadeMat);
     m.position.copy(o);
     this.g.scene.add(m);
-    this.nades.push({ p: o.clone(), v: vel.clone(), mesh: m, fuse, owner, auth, dmg: W.dmg, radius: W.radius, spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, 0) });
+    this.nades.push({ p: o.clone(), v: vel.clone(), mesh: m, fuse, owner, auth, dmg: W.dmg, radius: W.radius, smoke: !!W.smoke, spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, 0) });
   }
 
   // Artilleriegranate (unsichtbar) mit Pfeifen: schlägt nach delay bei p ein
@@ -253,6 +254,11 @@ export class Combat {
       n.mesh.position.copy(n.p);
       n.mesh.rotation.x += n.spin.x * dt * (n.v.length() > 0.5 ? 1 : 0); n.mesh.rotation.y += n.spin.y * dt * (n.v.length() > 0.5 ? 1 : 0);
       n.fuse -= dt;
+      if (n.smoke) {
+        if (n.fuse <= 0 && !n.smoking) { n.smoking = true; g.effects.smokeGrenade(n.p.x, n.p.y, n.p.z); g.addSmoke(n.p); g.audio.play('rocket', n.p, 0.3, 0.6); }
+        if (n.fuse <= -32) { g.scene.remove(n.mesh); this.nades.splice(i, 1); }
+        continue;
+      }
       if (n.fuse <= 0) {
         this.explode(n.p, n.dmg, n.radius, n.owner, n.auth, 1);
         g.scene.remove(n.mesh);

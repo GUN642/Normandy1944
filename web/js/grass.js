@@ -138,7 +138,8 @@ export class Grass {
     if (g.scene.fog) { this.u.fogColor.value.copy(g.scene.fog.color); this.u.fogDensity.value = g.scene.fog.density; }
     // Helligkeit grob an Sonne + Himmelslicht koppeln
     const k = Math.min(1.05, g.hemi.intensity * 0.38 + g.sun.intensity * 0.22);
-    this.u.uLight.value.setRGB(k, k, k * 0.95);
+    const a = g.atmo; const kk = k * (a ? (a.night ? 0.32 : 0.45 + 0.55 * a.dusk) : 1);
+    if (a && a.night) this.u.uLight.value.setRGB(kk * 0.8, kk * 0.9, kk * 1.15); else this.u.uLight.value.setRGB(kk, kk, kk * 0.95);
   }
 
   dispose() { if (this.mesh) { this.g.scene.remove(this.mesh); this.mesh.geometry.dispose(); } }

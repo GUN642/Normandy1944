@@ -303,7 +303,7 @@ export class Units {
       const dot = (dx * fwd.x + dz * fwd.z) / (d || 1);
       if (dot < -0.2 && d > 15 && !u.alert) continue;
       e.chest ? e.chest(_w) : _w.set(e.pos.x, e.pos.y + 1.2, e.pos.z);
-      if (!W.los(eye, _w)) continue;
+      if (!W.los(eye, _w) || this.g.smokeBlocks(eye, _w)) continue;
       best = e; bd = d;
     }
     return best;
@@ -396,7 +396,7 @@ export class Units {
       } else {
         // Sichtkontakt prüfen
         u.target.chest ? u.target.chest(_w) : _w.copy(u.target.pos).setY(u.target.pos.y + 1.2);
-        if (W.los(u.eye, _w)) u.targetSeen = g.time;
+        if (W.los(u.eye, _w) && !g.smokeBlocks(u.eye, _w)) u.targetSeen = g.time;
         else if (rand() < 0.3) { const t = this.scan(u); if (t) { u.target = t; u.targetSeen = g.time; } }
       }
     }

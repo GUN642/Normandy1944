@@ -53,8 +53,31 @@ class Decals {
     this.mesh.count = Math.min(140, this.n);
     this.mesh.instanceMatrix.needsUpdate = true;
   }
-  hole() {}
-  dispose() { this.g.scene.remove(this.mesh); }
+  // Einschussloch in Mauerwerk/Beton: kleines Abziehbild auf der getroffenen Wandseite
+  hole(p, box) {
+    if (!box || !(box.kind === 'house' || box.kind === 'wall' || box.kind === 'bunker') || p.y > box.y1 - 0.05) return;
+    if (!this.holes) {
+      const c = document.createElement('canvas'); c.width = c.height = 32;
+      const x = c.getContext('2d');
+      const g1 = x.createRadialGradient(16, 16, 1, 16, 16, 15);
+      g1.addColorStop(0, 'rgba(10,8,6,1)'); g1.addColorStop(0.3, 'rgba(40,34,28,0.95)'); g1.addColorStop(0.55, 'rgba(200,190,170,0.6)'); g1.addColorStop(1, 'rgba(200,190,170,0)');
+      x.fillStyle = g1; x.fillRect(0, 0, 32, 32);
+      this.holes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), 300);
+      this.holes.count = 0; this.holes.frustumCulled = false; this.hn = 0;
+      this.g.scene.add(this.holes);
+    }
+    const dx = p.x - box.x, dz = p.z - box.z;
+    const lx = dx * box.c - dz * box.s, lz = dx * box.s + dz * box.c;
+    let nx = 0, nz = 0;
+    if (box.hw - Math.abs(lx) < box.hd - Math.abs(lz)) nx = Math.sign(lx) || 1; else nz = Math.sign(lz) || 1;
+    const wx = nx * box.c + nz * box.s, wz = -nx * box.s + nz * box.c;
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(wx, 0, wz));
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.random() * 6));
+    const s = 0.1 + Math.random() * 0.08;
+    this.holes.setMatrixAt(this.hn % 300, new THREE.Matrix4().compose(new THREE.Vector3(p.x + wx * 0.03, p.y, p.z + wz * 0.03), q, new THREE.Vector3(s, s, s)));
+    this.hn++; this.holes.count = Math.min(300, this.hn); this.holes.instanceMatrix.needsUpdate = true;
+  }
+  dispose() { this.g.scene.remove(this.mesh); if (this.holes) this.g.scene.remove(this.holes); }
 }
 
 class Game {
@@ -151,6 +174,7 @@ class Game {
     $('load-text').textContent = T('Lade Karte …', 'Loading map …');
     await new Promise((r) => setTimeout(r, 30));
     this.cleanup();
+    this.smokes = [];
     this.q = qualityConfig(this.settings);
     if (this.renderer.shadowMap.enabled !== this.q.shadows > 0 || (this.sun.castShadow && this.sun.shadow.mapSize.x !== this.q.shadowMap)) this.initRenderer();
     this.resize();
@@ -310,6 +334,22 @@ class Game {
     if (!sq) { sq = { id: this.units.squads.length, team: side, order: 'follow', units: [], home: u.pos.clone() }; this.units.squads.push(sq); }
     const old = u.squad; if (old) old.units = old.units.filter((x) => x !== u);
     sq.units.push(u); u.squad = sq;
+  }
+  // Rauchwolken: verdecken der KI die Sicht (wachsen nach dem Zünden, lösen sich nach ~30 s auf)
+  addSmoke(p) { (this.smokes || (this.smokes = [])).push({ x: p.x, y: p.y, z: p.z, t0: this.time }); }
+  smokeBlocks(a, b) {
+    if (!this.smokes || !this.smokes.length) return false;
+    for (let i = this.smokes.length - 1; i >= 0; i--) {
+      const s = this.smokes[i], age = this.time - s.t0;
+      if (age > 32) { this.smokes.splice(i, 1); continue; }
+      const r = Math.min(7, age * 2.5) * (age > 26 ? (32 - age) / 6 : 1);
+      if (r < 1) continue;
+      const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((s.x - a.x) * dx + (s.z - a.z) * dz) / L2));
+      const px = a.x + dx * t - s.x, pz = a.z + dz * t - s.z, py = a.y + (b.y - a.y) * t - s.y;
+      if (px * px + pz * pz < r * r && py < r * 0.9) return true;
+    }
+    return false;
   }
   squadLeaderFor(team) { return this.player.alive && this.player.team === team ? this.player : null; }
 
