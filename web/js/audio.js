@@ -28,7 +28,7 @@ export class AudioSys {
     this.B = {
       rifle: this.shot(0.7, 1500, 1.0, 0.012, 0.1), carbine: this.shot(0.5, 2000, 0.6, 0.008, 0.18), smg45: this.shot(0.35, 900, 0.7, 0.006, 0.25),
       smg9: this.shot(0.32, 1500, 0.55, 0.005, 0.28), stg: this.shot(0.4, 1700, 0.75, 0.007, 0.22), mg42: this.shot(0.3, 1300, 0.9, 0.006, 0.12),
-      pistol: this.shot(0.3, 1900, 0.45, 0.005, 0.3), mg50: this.shot(0.5, 600, 1.0, 0.012), rocket: this.rocketLaunch(), cannon: this.boom(1.2, 0.5),
+      pistol: this.shot(0.3, 1900, 0.45, 0.005, 0.3), pistol9: this.shot(0.28, 2100, 0.4, 0.005, 0.3), rifleDE: this.shot(0.7, 1450, 1.0, 0.012, 0.1), mg50: this.shot(0.5, 600, 1.0, 0.012), rocket: this.rocketLaunch(), cannon: this.boom(1.2, 0.5),
       boom: this.boom(2.6, 1), boomSmall: this.boom(1.4, 0.6), boomBig: this.boom(3.8, 1.4), crack: this.crack(), ping: this.ping(),
       click: this.click(0.02, 5000), bolt: this.bolt(), mag: this.click(0.05, 1800), whistle: this.whistle(), mimi: this.mimi(),
       step: this.click(0.06, 600), thud: this.click(0.12, 220), hit: this.click(0.04, 3000), ring: this.ring(), flak: this.shot(0.3, 800, 0.6, 0.01),
@@ -36,6 +36,7 @@ export class AudioSys {
     };
     this.loops = {};
     this.startLoops();
+    this.loadSamples();
   }
 
   // ------------------------------------------------------------ Synthese
@@ -123,6 +124,20 @@ export class AudioSys {
   rocketLaunch() { return this.buf(1.2, (d, n) => { let lp = 0; for (let i = 0; i < n; i++) { const t = i / SR; lp += ((Math.random() * 2 - 1) - lp) * 0.3; d[i] = lp * (t < 0.01 ? t / 0.01 : Math.exp(-t * 2.5)) + (Math.random() * 2 - 1) * Math.exp(-t * 30) * 0.8; } }); }
   noiseBuf(sec, k) { return this.buf(sec, (d, n) => { let lp = 0; for (let i = 0; i < n; i++) { lp += ((Math.random() * 2 - 1) - lp) * k; d[i] = lp; } }); }
 
+  // ------------------------------------------------------------ Echte Aufnahmen (CC0)
+  // Free Firearm Sound Library (Ben Jaszczak, 2014, CC0) – siehe snd/QUELLEN.md.
+  // Bis die Dateien geladen sind (oder falls sie fehlen), bleiben die synthetischen Klänge aktiv.
+  loadSamples() {
+    const map = { rifle: 'rifle_us', rifleDE: 'rifle_de', carbine: 'carbine', smg45: 'smg', smg9: 'smg', stg: 'stg', mg42: 'mg42', pistol: 'pistol45', pistol9: 'pistol9' };
+    this.rate = { smg45: 0.9, smg9: 1.04 };
+    const base = new URL('../snd/', import.meta.url);
+    const cache = {};
+    for (const [key, file] of Object.entries(map)) {
+      const p = cache[file] || (cache[file] = fetch(new URL(file + '.mp3', base)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))).then((ab) => this.ctx.decodeAudioData(ab)));
+      p.then((buf) => { this.B[key] = buf; this.real = true; }).catch(() => { /* synthetisch bleiben */ });
+    }
+  }
+
   // ------------------------------------------------------------ Dauerklänge: Wind, Brandung, Regen, Motoren
   startLoops() {
     const ctx = this.ctx;
@@ -191,7 +206,7 @@ export class AudioSys {
     if (dist > far * 2.5) return;
     const att = 1 / (1 + Math.pow(dist / (far * 0.08), 1.6));
     const g = ctx.createGain(); g.gain.value = vol * att;
-    const src = ctx.createBufferSource(); src.buffer = b; src.playbackRate.value = rate * (dist > 200 ? 0.92 : 1);
+    const src = ctx.createBufferSource(); src.buffer = b; src.playbackRate.value = rate * ((this.rate && this.rate[name]) || 1) * (dist > 200 ? 0.92 : 1);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.max(500, 16000 / (1 + dist / 60));
     const p = ctx.createStereoPanner(); p.pan.value = Number.isFinite(pan) ? pan * 0.85 : 0;
     src.connect(lp).connect(g).connect(p).connect(this.sfx);
