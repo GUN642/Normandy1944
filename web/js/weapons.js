@@ -365,10 +365,61 @@ const BUILD = {
   },
 };
 
+// Visierung: Lage von Kimme (rear) und Korn (front) entlang der Laufachse (cm, wie die Profile),
+// Höhe der Visierlinie h (cm über dem Ursprung), Art der Kimme und ob das Korn einen Tunnel hat
+export const SIGHTS = {
+  garand: { rear: -4.5, front: 79, h: 5.0, type: 'aperture', ears: true },
+  carbine: { rear: -3, front: 50, h: 3.9, type: 'aperture', ears: true },
+  thompson: { rear: -9, front: 42, h: 4.6, type: 'aperture' },
+  bar: { rear: -4, front: 81, h: 4.6, type: 'aperture', ears: true },
+  m1911: { rear: -5, front: 14, h: 4.3, type: 'notch' },
+  kar98k: { rear: 15, front: 84, h: 3.7, type: 'notch', hood: true },
+  g43: { rear: 4, front: 73.5, h: 4.0, type: 'notch', hood: true },
+  mp40: { rear: 0, front: 39, h: 4.0, type: 'notch', hood: true },
+  stg44: { rear: 2, front: 53.5, h: 4.3, type: 'notch', hood: true },
+  mg42: { rear: 4, front: 55, h: 6.8, type: 'notch' },
+  p38: { rear: -5, front: 12, h: 3.6, type: 'notch' },
+};
+function addSights(g, S) {
+  const m = new THREE.MeshStandardMaterial({ color: 0x17191c, roughness: 0.7, metalness: 0.2 });
+  const post = new THREE.MeshBasicMaterial({ color: 0x0b0b0b });
+  const B = (x0, x1, y0, y1, w, z, mat = m) => { const b = box(x0, x1, y0, y1, w, mat, z); g.add(b); return b; };
+  const h = S.h;
+  // grobe Visierteile des Grundmodells entfernen, die neue Visierung ersetzt sie
+  const bb = new THREE.Box3(), sz = new THREE.Vector3(), c = new THREE.Vector3();
+  for (const ch of [...g.children]) {
+    if (!ch.isMesh) continue;
+    bb.setFromObject(ch); bb.getSize(sz); bb.getCenter(c);
+    const near = Math.abs(c.z + S.rear / 100) < 0.045 || Math.abs(c.z + S.front / 100) < 0.04;
+    if (near && sz.x < 0.03 && sz.y < 0.03 && sz.z < 0.08 && bb.max.y > (h - 2.2) / 100) g.remove(ch);
+  }
+  // Korn: schmale Klinge, oben auf der Visierlinie
+  B(S.front - 0.2, S.front + 0.2, h - 2.0, h, 0.2, 0, post);
+  B(S.front - 0.6, S.front + 0.6, h - 2.6, h - 1.9, 1.2, 0);           // Kornfuß
+  if (S.ears) for (const sx of [-1, 1]) B(S.front - 0.5, S.front + 0.5, h - 2.4, h + 0.35, 0.22, sx * 0.85);   // Schutzohren (US)
+  if (S.hood) {                                                          // Korntunnel (DE)
+    const t = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.13, 4, 12, Math.PI), m);
+    t.position.set(0, (h - 0.9) / 100, -S.front / 100); t.scale.setScalar(0.01 * 100 / 100); g.add(t);
+    t.scale.set(0.01, 0.01, 0.01); t.geometry.scale(1, 1, 1);
+  }
+  if (S.type === 'aperture') {
+    // Lochkimme: Ring, durch dessen Mitte man blickt
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.09, 6, 20), m);
+    r.position.set(0, h / 100, -S.rear / 100); r.scale.set(0.01, 0.01, 0.01);
+    g.add(r);
+    B(S.rear - 0.15, S.rear + 0.15, h - 1.6, h - 0.5, 0.25, 0);
+  } else {
+    // offene Kimme: zwei Blöcke mit Kerbe
+    for (const sx of [-1, 1]) B(S.rear - 0.2, S.rear + 0.2, h - 0.55, h, 0.45, sx * 0.4);
+    B(S.rear - 0.2, S.rear + 0.2, h - 1.0, h - 0.55, 1.25, 0);
+  }
+  g.userData.sight = { h: h / 100, rear: -S.rear / 100, front: -S.front / 100, type: S.type };
+}
+
 const cache = new Map();
 // Modell (geteilte Geometrie, Klon je Verwendung)
 export function weaponModel(id) {
-  if (!cache.has(id)) cache.set(id, (BUILD[id] || BUILD.garand)());
+  if (!cache.has(id)) { const g = (BUILD[id] || BUILD.garand)(); if (SIGHTS[id]) addSights(g, SIGHTS[id]); cache.set(id, g); }
   const src = cache.get(id);
   const c = src.clone(true);
   c.userData = { ...src.userData };

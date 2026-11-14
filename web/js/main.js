@@ -665,7 +665,10 @@ class Game {
       const vm = p.vm;
       vm.hemi.intensity = this.hemi.intensity * 1.1; vm.hemi.color.copy(this.hemi.color);
       vm.sun.intensity = this.sun.intensity * 0.8; vm.sun.color.copy(this.sun.color);
+      // beim Zielen: alles zwischen Auge und Kimme ausblenden (Kolben, Wange, rechte Hand)
+      if (vm.clipZ) { this._clip = this._clip || new THREE.Plane(new THREE.Vector3(0, 0, -1), 0); this._clip.constant = vm.clipZ; r.clippingPlanes = [this._clip]; }
       r.render(vm.scene, vm.cam);
+      r.clippingPlanes = [];
     }
   }
 
@@ -759,6 +762,10 @@ class Game {
     const av = appVersion();
     $('ver').textContent = (av ? 'App ' + av + ' · ' : '') + (v ? 'Version ' + v.versionName : '');
     $('btn-update').classList.toggle('hidden', !isApp);
+    // APK-Download nur im Browser anbieten und nur, wenn die Datei veröffentlicht ist
+    if (!isApp) {
+      try { const r = await fetch('apk/normandy1944.apk', { method: 'HEAD', cache: 'no-store' }); if (r.ok) $('apk-link').classList.remove('hidden'); } catch (_) { /* offline */ }
+    }
   }
 
   buildMenus() {

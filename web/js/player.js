@@ -29,6 +29,7 @@ class ViewModel {
     if (this.model) this.holder.remove(this.model);
     const m = weaponModel(id);
     this.model = m;
+    this.arms = [];
     this.W = WEAPONS[id];
     this.sleeve.color.setHex(team === 'us' ? 0x7d7652 : 0x5f6556);
     // Hände/Unterarme
@@ -37,7 +38,7 @@ class ViewModel {
       const s = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, len), this.sleeve); s.position.z = len / 2;
       const h = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.09), this.skin);
       g.add(s, h); g.position.set(x, y, z); g.rotation.set(rx, 0, rz);
-      m.add(g);
+      m.add(g); this.arms.push(g);
     };
     const W = this.W;
     if (W.grenade) arm(0.02, -0.03, 0.06, 0.4, 0);
@@ -60,9 +61,14 @@ class ViewModel {
     const ud = this.model.userData;
     // Hüftanschlag vs. Zielen über Kimme und Korn
     const hip = W.grenade ? [0.2, -0.24, -0.38] : W.pistol ? [0.17, -0.19, -0.4] : W.rocket ? [0.19, -0.14, -0.3] : [0.19, -0.205, -0.3];
-    // Anschlag: Kimme auf Augenhöhe, Kolbenende knapp vor der Kamera (sonst füllt der Kolben das Bild)
-    const butt = W.pistol || W.grenade ? 0 : W.rocket ? 0.8 : 0.6;
-    const aim = [0, -ud.sightY, -Math.max((ud.sightZ || 0.05) + 0.17, butt + 0.04)];
+    // Anschlag: Visierlinie (Kimme–Korn) genau auf der Blickachse, Kimme kurz vor dem Auge
+    let aim;
+    const sg = ud.sight;
+    if (sg) {
+      const eye = W.pistol ? 0.42 : sg.type === 'aperture' ? 0.09 : 0.13;
+      aim = [0, -sg.h, -eye - sg.rear];
+    } else aim = [0, -ud.sightY, -Math.max((ud.sightZ || 0.05) + 0.17, (W.rocket ? 0.8 : 0.6) + 0.04)];
+    this.clipZ = sg && !W.pistol && ads > 0.5 ? -(W.pistol ? 0.3 : sg.type === 'aperture' ? 0.07 : 0.1) : 0;
     const x = hip[0] + (aim[0] - hip[0]) * ads + Math.sin(this.t) * 0.012 * bobA;
     const y = hip[1] + (aim[1] - hip[1]) * ads + Math.abs(Math.cos(this.t)) * 0.01 * bobA - this.swap * 0.25 - (p.reloading ? 0.08 : 0) + p.sway.y * 0.02;
     const z = hip[2] + (aim[2] - hip[2]) * ads + this.kick * 0.06;
@@ -70,6 +76,9 @@ class ViewModel {
     this.model.rotation.set(this.kick * 0.12 + (p.reloading ? 0.6 : 0) + (p.sprinting ? -0.5 : 0), (p.sprinting ? 0.7 : 0) + p.sway.x * 0.02, p.reloading ? 0.5 : p.sprinting ? 0.3 : 0);
     // Zielfernrohr: Modell bei vollem Anschlag ausblenden (Overlay)
     this.model.visible = !(ud.scope && ads > 0.92);
+    // beim Zielen über Kimme und Korn die Arme ausblenden (sie lägen unter der Visierlinie im Weg)
+    const arms = !(ud.sight && ads > 0.6);
+    for (const a of this.arms || []) a.visible = arms;
   }
 }
 
@@ -237,6 +246,11 @@ export class Player {
     const head = this.pos.y + this.eyeH() + 0.15;
     W.collide(this.pos, 0.33, this.pos.y, head);
     this.collideTanks();
+    for (const u of g.units.list) {
+      if (!u.alive || u.inBoat) continue;
+      const dx = this.pos.x - u.pos.x, dz = this.pos.z - u.pos.z, d = Math.hypot(dx, dz);
+      if (d < 0.7 && d > 1e-3 && Math.abs(u.pos.y - this.pos.y) < 1.5) { this.pos.x = u.pos.x + dx / d * 0.7; this.pos.z = u.pos.z + dz / d * 0.7; }
+    }
     this.pos.y += this.vel.y * dt;
     const gy = W.groundAt(this.pos.x, this.pos.z, this.pos.y + 0.6);
     const floor = swim ? Math.max(gy, -1.25) : gy;

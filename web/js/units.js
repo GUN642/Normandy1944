@@ -407,7 +407,8 @@ export class Units {
     else if (sq.order === 'follow' && sq.follow) {
       const L = sq.follow;
       const idx = sq.units.indexOf(u);
-      const ang = (idx / Math.max(1, sq.units.length)) * Math.PI - Math.PI / 2 + L.yaw + Math.PI;
+      // Fächer HINTER dem Anführer (rotation.y = yaw blickt nach −z; hinten = (sin yaw, cos yaw))
+      const ang = L.yaw + ((idx + 0.5) / Math.max(1, sq.units.length) - 0.5) * Math.PI * 0.9;
       _v.set(L.pos.x + Math.sin(ang) * (4 + (idx % 3) * 2), 0, L.pos.z + Math.cos(ang) * (4 + (idx % 3) * 2));
       const d = _v.distanceTo(_w.set(u.pos.x, 0, u.pos.z));
       if (d > 3) {
@@ -462,6 +463,8 @@ export class Units {
         u.pos.x += (dx / d) * step; u.pos.z += (dz / d) * step;
         W.collide(u.pos, 0.35, u.pos.y, u.pos.y + 1.7);
         this.separate(u);
+        const pl = this.g.player;
+        if (pl.alive) { const dx2 = u.pos.x - pl.pos.x, dz2 = u.pos.z - pl.pos.z, d2 = Math.hypot(dx2, dz2); if (d2 < 1.4 && d2 > 1e-3) { u.pos.x = pl.pos.x + dx2 / d2 * 1.4; u.pos.z = pl.pos.z + dz2 / d2 * 1.4; } }
         const moved = Math.hypot(u.pos.x - ox, u.pos.z - oz);
         u.speed = moved / dt;
         u.stuck = moved < step * 0.3 ? u.stuck + dt : 0;
@@ -689,7 +692,7 @@ export class Units {
     r.root.position.copy(u.pos);
     r.root.rotation.y = u.yaw;
     const d = this.g.camera.position.distanceTo(u.pos);
-    r.root.visible = d < this.g.q.view * 0.9;
+    r.root.visible = d < this.g.q.view * 0.9 && d > 0.9;
     r.setLod(d > 70 ? 1 : 0);
     if (r.root.visible) r.pose(u.speed, u.stance, u.pitch, dt, 0, u.firing);
   }
