@@ -45,7 +45,7 @@ class ViewModel {
     else if (W.pistol) { arm(0, -0.05, 0.02, 0.5, 0); arm(-0.03, -0.06, 0.03, 0.5, 0.4); }
     else if (W.rocket) { arm(0.0, -0.06, 0.0, 0.4, 0); arm(0.0, -0.06, -0.25, 0.6, 0.3); }
     else { arm(0.0, -0.05, 0.02, 0.45, 0); arm(-0.01, -0.03, -0.3, 0.55, 0.45, 0.42); }
-    m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+    m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; o.material = o.material.clone(); o.material.side = THREE.DoubleSide; } });
     this.holder.add(m);
     this.swap = 1;
   }
@@ -53,14 +53,19 @@ class ViewModel {
     this.cam.aspect = aspect; this.cam.updateProjectionMatrix();
     if (!this.model) return;
     const W = this.W;
-    this.t += dt * (p.speed * 1.9 + 0.6);
-    this.kick = Math.max(0, this.kick - dt * 9);
-    this.swap = Math.max(0, this.swap - dt * 3);
     const ads = p.ads;
-    const bobA = (1 - ads * 0.85) * Math.min(1, p.speed / 4);
+    // Alle Haltungswechsel weich überblenden (kein Springen zwischen zwei Lagen)
+    const ease = (cur, tgt, rate) => cur + (tgt - cur) * (1 - Math.exp(-dt * rate));
+    this.sprintB = ease(this.sprintB || 0, p.sprinting ? 1 : 0, 7);
+    this.reloadB = ease(this.reloadB || 0, p.reloading > 0 ? 1 : 0, 9);
+    this.kick = Math.max(0, this.kick - dt * 10);
+    this.swap = Math.max(0, this.swap - dt * 3);
+    this.t += dt * (Math.min(p.speed, 6) * 1.9 + 0.6);
+    const free = 1 - ads;                                          // Anteil Hüftanschlag
+    const bobA = free * Math.min(1, p.speed / 4);
     const ud = this.model.userData;
-    // Hüftanschlag vs. Zielen über Kimme und Korn
-    const hip = W.grenade ? [0.2, -0.24, -0.38] : W.pistol ? [0.17, -0.19, -0.4] : W.rocket ? [0.19, -0.14, -0.3] : [0.19, -0.205, -0.3];
+    // Hüftanschlag: ganze Waffe vor der Kamera (der Kolben wird nicht angeschnitten)
+    const hip = W.grenade ? [0.2, -0.24, -0.38] : W.pistol ? [0.17, -0.19, -0.42] : W.rocket ? [0.2, -0.15, -0.95] : [0.17, -0.2, -0.5];
     // Anschlag: Visierlinie (Kimme–Korn) genau auf der Blickachse, Kimme kurz vor dem Auge
     let aim;
     const sg = ud.sight;
@@ -68,15 +73,15 @@ class ViewModel {
       const eye = W.pistol ? 0.42 : sg.type === 'aperture' ? 0.09 : 0.13;
       aim = [0, -sg.h, -eye - sg.rear];
     } else aim = [0, -ud.sightY, -Math.max((ud.sightZ || 0.05) + 0.17, (W.rocket ? 0.8 : 0.6) + 0.04)];
-    this.clipZ = sg && !W.pistol && ads > 0.5 ? -(W.pistol ? 0.3 : sg.type === 'aperture' ? 0.07 : 0.1) : 0;
-    const x = hip[0] + (aim[0] - hip[0]) * ads + Math.sin(this.t) * 0.012 * bobA;
-    const y = hip[1] + (aim[1] - hip[1]) * ads + Math.abs(Math.cos(this.t)) * 0.01 * bobA - this.swap * 0.25 - (p.reloading ? 0.08 : 0) + p.sway.y * 0.02;
-    const z = hip[2] + (aim[2] - hip[2]) * ads + this.kick * 0.06;
+    this.clipZ = sg && !W.pistol && ads > 0.5 ? -(sg.type === 'aperture' ? 0.07 : 0.1) : 0;
+    const R = this.reloadB, S = this.sprintB;
+    const x = hip[0] + (aim[0] - hip[0]) * ads + Math.sin(this.t) * 0.012 * bobA + R * 0.03 + S * 0.03 + p.sway.x * 0.012 * free;
+    const y = hip[1] + (aim[1] - hip[1]) * ads + Math.abs(Math.cos(this.t)) * 0.01 * bobA - this.swap * 0.25 - R * 0.06 - S * 0.04 + p.sway.y * 0.012 * free;
+    const z = hip[2] + (aim[2] - hip[2]) * ads + this.kick * 0.035 + R * 0.06;
     this.model.position.set(x, y, z);
-    this.model.rotation.set(this.kick * 0.12 + (p.reloading ? 0.6 : 0) + (p.sprinting ? -0.5 : 0), (p.sprinting ? 0.7 : 0) + p.sway.x * 0.02, p.reloading ? 0.5 : p.sprinting ? 0.3 : 0);
-    // Zielfernrohr: Modell bei vollem Anschlag ausblenden (Overlay)
+    // Nachladen: Waffe senkt sich und kippt zur Seite; Sprint: Mündung nach unten links; Rückstoß kurz nach oben
+    this.model.rotation.set(this.kick * 0.06 * (1 - ads * 0.6) - R * 0.18 - S * 0.5, S * 0.65, R * 0.7 + S * 0.25);
     this.model.visible = !(ud.scope && ads > 0.92);
-    // beim Zielen über Kimme und Korn die Arme ausblenden (sie lägen unter der Visierlinie im Weg)
     const arms = !(ud.sight && ads > 0.6);
     for (const a of this.arms || []) a.visible = arms;
   }
@@ -108,7 +113,7 @@ export class Player {
     this.stance = 0; this.ads = 0; this.speed = 0;
     this.stamina = 1; this.suppress = 0; this.bandages = 3; this.healing = 0;
     this.nextFire = 0; this.reloading = 0; this.boltT = 0; this.burstHeld = false;
-    this.recoil = 0; this.recoilYaw = 0;
+    this.recoil = 0; this.recoilYaw = 0; this.recoilDebt = 0;
     this.onGround = true; this.inBoat = null; this.chute = null; this.climbing = false;
     this.lastShot = -10; this.charge = null; this.lastHurt = -10;
     this.vel.set(0, 0, 0);
@@ -168,8 +173,15 @@ export class Player {
     this.yaw -= inp.look.x * sens;
     this.pitch = clamp(this.pitch - inp.look.y * sens * (g.settings.invertY ? -1 : 1), -1.45, 1.45);
     // Rückstoß abbauen
-    const rec = this.recoil * Math.min(1, dt * 8);
+    const rec = this.recoil * Math.min(1, dt * 14);
     this.recoil -= rec; this.pitch = clamp(this.pitch + rec, -1.45, 1.45);
+    this.recoilDebt = (this.recoilDebt || 0) + rec;
+    // nach dem Schuss kehrt die Mündung in die Ausgangslage zurück (wie beim echten Schützen)
+    if (g.time - this.lastShot > 0.08 && this.recoilDebt > 0) {
+      const back = this.recoilDebt * Math.min(1, dt * 7);
+      this.recoilDebt -= back; this.pitch = clamp(this.pitch - back, -1.45, 1.45);
+    }
+    if (Math.abs(inp.look.y) > 0.002) this.recoilDebt *= 0.9;   // Spieler korrigiert selbst
     const ry = this.recoilYaw * Math.min(1, dt * 8); this.recoilYaw -= ry; this.yaw += ry;
     // Atem-/Zielschwanken (stärker im Stehen, unter Beschuss, nach dem Sprinten)
     const swayAmp = (this.stance === 2 ? 0.25 : this.stance === 1 ? 0.55 : 1) * (1 + this.suppress * 2 + (1 - this.stamina) * 1.5) * (this.W.scope ? 1.4 : 1);
@@ -204,7 +216,8 @@ export class Player {
     // Sprinten
     const wantSprint = inp.held('sprint') && inp.move.y > 0.3 && this.stance !== 2 && !swim;
     if (wantSprint && this.stance === 1) this.stance = 0;
-    this.sprinting = wantSprint && this.stamina > 0.05 && this.ads < 0.3;
+    // Hysterese: erst ab 25 % Ausdauer wieder sprinten (sonst flackert die Haltung)
+    this.sprinting = wantSprint && this.stamina > (this.sprinting ? 0.02 : 0.25) && this.ads < 0.3;
     this.stamina = clamp(this.stamina + dt * (this.sprinting ? -0.12 : 0.1), 0, 1);
     let sp = this.stance === 2 ? 0.9 : this.stance === 1 ? 1.7 : this.sprinting ? 5.6 : 3.3;
     if (this.ads > 0.5) sp *= 0.55;
@@ -413,10 +426,10 @@ export class Player {
     const g = this.g, cam = g.camera;
     let ey = this.eyeH();
     this.eyeS = this.eyeS === undefined ? ey : this.eyeS + (ey - this.eyeS) * Math.min(1, dt * 10);
-    const bob = this.onGround && !this.inBoat ? Math.sin((this.bobT = (this.bobT || 0) + dt * this.speed * 2.2)) * 0.035 * Math.min(1, this.speed / 4) * (1 - this.ads * 0.8) : 0;
+    const bob = this.onGround && !this.inBoat ? Math.sin((this.bobT = (this.bobT || 0) + dt * this.speed * 2.2)) * 0.035 * Math.min(1, this.speed / 4) * (1 - this.ads * 0.95) : 0;
     cam.position.set(this.pos.x, this.pos.y + this.eyeS + bob, this.pos.z);
     if (this.inBoat) cam.position.y += Math.sin(g.time * 1.3) * 0.15;
-    const swayK = this.ads > 0.5 ? 0.004 * (this.W.scope ? 1.6 : 1) : 0.0015;
+    const swayK = this.ads > 0.5 ? 0.0011 * (this.W.scope ? 1.5 : 1) : 0.0015;
     _e.set(this.pitch + this.sway.y * swayK, this.yaw + this.sway.x * swayK, Math.sin(g.time * 1.1) * (this.inBoat ? 0.04 : 0), 'YXZ');
     cam.quaternion.setFromEuler(_e);
     const baseFov = g.settings.fov || 70;

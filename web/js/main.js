@@ -473,8 +473,8 @@ class Game {
     if (!blockInput) this.handleKeys(inp);
     if (this.radioOpen && !blockInput) { /* Funkmenü verwendet Zifferntasten */ }
     if (p.alive) {
+      if (I === inp) this.aimAssist(dt, inp);
       p.update(dt, I);
-      this.aimAssist(dt);
       if (!this.radioOpen) p.weaponUpdate(dt, I);
       this.interactions(dt, I);
     } else this.deadUpdate(dt);
@@ -498,7 +498,7 @@ class Game {
     if (inp.pressed('radio')) { this.radioOpen = !this.radioOpen; this.hud.radioMenu(this.radioOpen, this.radioItems()); }
     if (this.radioOpen) for (let i = 1; i <= 4; i++) if (inp.pressed('w' + i) || this.input.down.has('Digit' + i)) { if (!this._rk || this._rk !== i) this.callSupport(i - 1); this._rk = i; }
     if (!this.input.down.has('Digit1') && !this.input.down.has('Digit2') && !this.input.down.has('Digit3') && !this.input.down.has('Digit4')) this._rk = 0;
-    this.hud.scoreboard(inp.held('score'));
+    this.hud.scoreboard(inp.held('score') || !!this.sbOpen);
     if (inp.pressed('map')) { this.mapOpen = !this.mapOpen; }
     this.hud.drawMap(this.mapOpen);
     if (inp.pressed('view')) { this.thirdPerson = !this.thirdPerson; }
@@ -633,27 +633,45 @@ class Game {
     if (this.net && !this.net.isHost) this.net.send({ t: 'cls', c: p.cls, s: p.team });
   }
 
-  // Zielhilfe für Touch/Gamepad
-  aimAssist(dt) {
-    const mode = this.settings.aimAssist;
-    if (!mode || mode === 'off' || this.input.device === 'keyboard') return;
-    const p = this.player, cam = this.camera;
-    cam.getWorldDirection(_v);
-    let best = null, ba = 0.05;
-    for (const u of this.units.list) {
-      if (!u.alive || u.team === p.team) continue;
-      const d = u.pos.distanceTo(p.pos);
-      if (d > 150) continue;
-      u.chest(_w).sub(cam.position);
-      const a = _w.angleTo(_v);
-      if (a < ba) { ba = a; best = u; }
-    }
+  // Zielhilfe für Touch/Gamepad (wie im Medevac-sim): bremst das Zielen über einem Feind ab und
+  // zieht das Visier sanft auf ihn, solange gezielt, gefeuert oder bewegt wird. Wirkt auf die Eingabe.
+  aimAssist(dt, inp) {
+    const lvl = this.settings.aimAssist;
+    if (!lvl || lvl === 'off' || (this.input.device !== 'touch' && this.input.device !== 'gamepad')) return;
+    const p = this.player;
+    if (!p.alive || p.chute || p.inBoat) return;
+    const s = lvl === 'strong' ? 1.8 : 1;
+    const cam = this.camera.position;
+    const zoom = p.ads > 0.3;
+    let best = null, bestK = 1, by = 0, bp = 0;
+    const consider = (e) => {
+      const dx = e.pos.x - cam.x, dz = e.pos.z - cam.z, dy = e.pos.y + (e.stance === 2 ? 0.3 : e.stance === 1 ? 0.85 : 1.25) - cam.y;
+      const h = Math.hypot(dx, dz);
+      if (h > 260) return;
+      const yaw = Math.atan2(-dx, -dz), pitch = Math.atan2(dy, h), dist = Math.hypot(h, dy);
+      const ey = wrapAngle(yaw - p.yaw), ep = pitch - p.pitch;
+      const cone = (0.05 + 1.3 / Math.max(dist, 5)) * (zoom ? 1.3 : 1) * (0.8 + 0.2 * s);
+      const k = Math.hypot(ey * Math.cos(p.pitch), ep) / cone;
+      if (k < bestK) { bestK = k; best = e; by = ey; bp = ep; }
+    };
+    for (const u of this.units.list) if (u.alive && u.team !== p.team && !u.inBoat) consider(u);
+    if (this.mode === 'versus') for (const a of this.avatars.values()) if (a.alive && a.visible && a.team !== p.team) consider(a);
     if (!best) return;
-    best.chest(_w).sub(cam.position);
-    const yaw = Math.atan2(-_w.x, -_w.z), pitch = Math.atan2(_w.y, Math.hypot(_w.x, _w.z));
-    const k = (mode === 'strong' ? 3 : 1.4) * dt * (p.ads > 0.5 ? 1.5 : 1);
-    p.yaw += wrapAngle(yaw - p.yaw) * k;
-    p.pitch += (pitch - p.pitch) * k;
+    // nur auf sichtbare Ziele (Sichtprüfung zwischengespeichert)
+    if (this._aaT !== best || this.time > (this._aaLosT || 0)) {
+      this._aaT = best; this._aaLosT = this.time + 0.25;
+      best.chest ? best.chest(_w) : _w.copy(best.pos).setY(best.pos.y + 1.2);
+      this._aaLos = this.world.los(cam, _w) && !this.smokeBlocks(cam, _w);
+    }
+    if (!this._aaLos) return;
+    const fr = 1 - 0.45 * Math.min(1, s * 0.8) * (1 - bestK);
+    inp.look.x *= fr; inp.look.y *= fr;
+    const active = zoom || inp.held('fire') || Math.abs(inp.look.x) + Math.abs(inp.look.y) > 1e-4;
+    if (!active) return;
+    const sens = (this.settings.sensitivity || 1) * (1 - p.ads * (1 - 1 / (p.W.zoom || 1)) * 0.85);
+    const pull = Math.min(1, dt * (zoom || inp.held('fire') ? 2.6 : 1.4) * s);
+    inp.look.x -= (by * pull) / sens;
+    inp.look.y -= ((bp * pull) / sens) * (this.settings.invertY ? -1 : 1);
   }
 
   // ------------------------------------------------------------ Darstellung
@@ -849,14 +867,15 @@ class Game {
       else this.startMission(b.op, b.side, b.mode, b.opts, this.briefCls);
     });
     // Touch-Menütasten im Spiel
-    on('tb-pause', () => this.pause(true));
-    on('tb-map', () => { this.mapOpen = !this.mapOpen; });
-    on('tb-chat', () => this.comms.openChat());
-    on('tb-radio', () => { this.radioOpen = !this.radioOpen; this.hud.radioMenu(this.radioOpen, this.radioItems()); });
+    const tap = (id, fn) => { const el = $(id); if (el) el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.audio.init(); fn(); }); };
+    tap('tb-pause', () => this.pause(true));
+    tap('tb-map', () => { this.mapOpen = !this.mapOpen; });
+    tap('tb-chat', () => this.comms.openChat());
+    tap('tb-radio', () => { this.radioOpen = !this.radioOpen; this.hud.radioMenu(this.radioOpen, this.radioItems()); });
     $('radiomenu').addEventListener('pointerdown', (e) => { const b = e.target.closest('button[data-i]'); if (b) { e.preventDefault(); this.callSupport(+b.dataset.i); } });
-    on('tb-view', () => { this.thirdPerson = !this.thirdPerson; });
+    tap('tb-view', () => { this.thirdPerson = !this.thirdPerson; });
     $('mapview').addEventListener('pointerdown', () => { this.mapOpen = false; });
-    on('tb-score', () => { this.sbOpen = !this.sbOpen; this.hud.scoreboard(this.sbOpen); });
+    tap('tb-score', () => { this.sbOpen = !this.sbOpen; });
     // Vollbild auf Mobilgeräten
     document.addEventListener('click', () => { if (isMobile) enterFullscreen(); }, { once: true });
   }

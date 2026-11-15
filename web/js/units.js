@@ -205,7 +205,12 @@ export class Units {
       if (!W.navFree(cell[0], cell[1])) continue;
       let cover = 0;
       for (const b of W.query(x, z, 4)) if (b.kind === 'hedge' || b.kind === 'wall' || b.kind === 'house') cover++;
-      if (cover || i > n * 4) spots.push(new THREE.Vector3(x, 0, z));
+      // im Stehen muss man über die Deckung in Feindrichtung sehen können
+      const ty = this.g.attackDir.yaw + (sq.team === this.g.attackDir.team ? 0 : Math.PI);
+      const eyeP = new THREE.Vector3(x, W.h(x, z) + 1.6, z), far = new THREE.Vector3(x - Math.sin(ty) * 25, 0, z - Math.cos(ty) * 25);
+      far.y = W.h(far.x, far.z) + 1.2;
+      const view = W.los(eyeP, far);
+      if ((cover && view) || i > n * 5) spots.push(new THREE.Vector3(x, 0, z));
     }
     while (spots.length < n) spots.push(c.clone().add(_v.set((rand() - 0.5) * 8, 0, (rand() - 0.5) * 8)));
     sq.spots = spots;
@@ -451,6 +456,8 @@ export class Units {
     u.stance = move ? (u.suppress > 0.5 ? 1 : 0) : wantProne ? 2 : engaging ? (u.role === 'mg' || u.role === 'sniper' ? 2 : u.static ? 0 : 1) : sq.order === 'hold' ? 1 : 0;
     if (u.tower || (u.static && u.crewOf && g.world.targets[u.crewOf] && g.world.targets[u.crewOf].kind === 'bunker')) u.stance = 0;
     if (u.inWater) u.stance = 0;
+    // Schusslinie war verdeckt: höhere Haltung erzwingen (über die Brustwehr schießen)
+    if (u.blockT > 0) { u.blockT -= dt; u.stance = Math.min(u.stance, u.blockStance); }
     // Bewegung
     if (move && goal) {
       const dx = goal.x - u.pos.x, dz = goal.z - u.pos.z, d = Math.hypot(dx, dz);
@@ -506,6 +513,27 @@ export class Units {
       else if (u.altWid) { /* Ersatzwaffe */ }
     }
     if (u.role === 'sniper' && rand() < 0.4 && t.stance !== 2) aimAt.y += 0.45;
+    // freie Schusslinie? Sonst nicht in die eigene Deckung feuern, sondern aufrichten bzw. Stellung wechseln
+    if (!u.losT || g.time > u.losT) {
+      u.losT = g.time + 0.4;
+      u.losOk = g.world.los(u.eye, aimAt);
+      if (!u.losOk) {
+        u.blockStance = Math.max(0, u.stance - 1); u.blockT = 5;
+        u.blockedFor = (u.blockedFor || 0) + 0.4;
+        if (u.blockedFor > 2.5 && u.stance === 0 && !u.static && u.spot) {
+          // ein paar Meter Richtung Feind bzw. seitlich versetzen
+          const dx = aimAt.x - u.pos.x, dz = aimAt.z - u.pos.z, dl = Math.hypot(dx, dz) || 1;
+          for (let k = 0; k < 6; k++) {
+            const side = (rand() - 0.5) * 6, fwd = 2 + rand() * 4;
+            const nx = u.pos.x + dx / dl * fwd - dz / dl * side, nz = u.pos.z + dz / dl * fwd + dx / dl * side;
+            const c = g.world.navCell(nx, nz);
+            if (g.world.navFree(c[0], c[1])) { u.spot = new THREE.Vector3(nx, 0, nz); u.spath = null; break; }
+          }
+          u.blockedFor = 0;
+        }
+      } else u.blockedFor = 0;
+    }
+    if (!u.losOk) return;
     const eye = u.eye;
     const dx = aimAt.x - eye.x, dy = aimAt.y - eye.y, dz = aimAt.z - eye.z;
     const dist = Math.hypot(dx, dz);

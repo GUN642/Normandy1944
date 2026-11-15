@@ -183,14 +183,14 @@ export class Input {
       this.device = 'touch';
       document.body.classList.add('touchmode');
       for (const t of e.changedTouches) {
-        if (t.target.closest && t.target.closest('.tb')) continue;
+        if (t.target.closest && (t.target.closest('.tb') || t.target.closest('button'))) continue;
         if (t.clientX < window.innerWidth * 0.4 && stickId === null) {
           stickId = t.identifier; sx = t.clientX; sy = t.clientY;
           stickEl.style.left = sx - R + 'px'; stickEl.style.top = sy - R + 'px'; stickEl.classList.add('on');
           this.tStick = { x: 0, y: 0 };
         } else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
       }
-      e.preventDefault();
+      if (!(e.target.closest && e.target.closest('button'))) e.preventDefault();
     }, { passive: false });
     zone.addEventListener('touchmove', (e) => {
       for (const t of e.changedTouches) {

@@ -22,7 +22,7 @@ export function loadSettings() {
   const d = {
     quality: isMobile ? 'medium' : 'high', renderScale: 1, viewDist: 1, shadows: 'auto', effects: 'auto', grass: true, postfx: true,
     volume: 0.8, music: 0.5, sensitivity: 1, invertY: false, difficulty: 1, showFps: false, fov: 70, tts: true, openMic: false,
-    lang: null, name: '', aimAssist: isMobile ? 'light' : 'off', gyro: false, gyroSens: 1, binds: null, hints: true,
+    lang: null, name: '', aimAssist: 'light', gyro: false, gyroSens: 1, binds: null, hints: true,
   };
   const s = Object.assign(d, read(SKEY) || {});
   if (!s.tvQ) { s.tvQ = true; if (detectTv()) s.quality = 'minimal'; write(SKEY, s); }

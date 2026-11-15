@@ -125,11 +125,13 @@ export class Atmosphere {
     // Regen folgt der Kamera
     if (this.rain) {
       const p = this.rain.geometry.attributes.position, a = p.array;
-      const wx = g.effects.wind.x * 0.05, wz = g.effects.wind.z * 0.05;
+      const vy = 9, vx = g.effects.wind.x * 0.35, vz = g.effects.wind.z * 0.35;   // m/s (Regentropfen ~9 m/s)
+      const len = 0.55 / vy;
       for (let i = 0; i < this.rainN; i++) {
         const o = i * 6;
-        a[o + 1] -= 22 * dt; a[o + 4] -= 22 * dt; a[o] += wx; a[o + 3] += wx; a[o + 2] += wz; a[o + 5] += wz;
-        if (a[o + 1] < cam.y - 4) { const x = cam.x + (rand() - 0.5) * 60, z = cam.z + (rand() - 0.5) * 60, y = cam.y + 12 + rand() * 18; a[o] = x; a[o + 1] = y; a[o + 2] = z; a[o + 3] = x - wx * 10; a[o + 4] = y - 0.7; a[o + 5] = z - wz * 10; }
+        a[o] += vx * dt; a[o + 1] -= vy * dt; a[o + 2] += vz * dt;
+        if (a[o + 1] < cam.y - 4 || Math.abs(a[o] - cam.x) > 32 || Math.abs(a[o + 2] - cam.z) > 32) { a[o] = cam.x + (rand() - 0.5) * 60; a[o + 1] = cam.y + 8 + rand() * 20; a[o + 2] = cam.z + (rand() - 0.5) * 60; }
+        a[o + 3] = a[o] - vx * len; a[o + 4] = a[o + 1] + vy * len; a[o + 5] = a[o + 2] - vz * len;
       }
       p.needsUpdate = true;
     }
