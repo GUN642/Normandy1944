@@ -245,3 +245,5 @@ body.touchmode #feed { top: 136px; }
 #mapview { pointer-events: auto; }
 
 #apk-link { text-decoration: none; font-size: 14px; padding: 8px 16px; background: linear-gradient(180deg, #4a5a34, #34401f); }
+
+.gpf { outline: 3px solid var(--acc) !important; outline-offset: 2px; }

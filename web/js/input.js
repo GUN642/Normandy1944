@@ -62,20 +62,29 @@ export class Input {
     this.refresh();
     window.addEventListener('keydown', (e) => {
       if (this.capture) { e.preventDefault(); const cb = this.capture; this.capture = null; cb(e.code); return; }
+      if (e.target && e.target.tagName === 'INPUT' && (e.target.type === 'text' || !e.target.type)) return;
+      // Android-WebView (App, Android TV): Controller-Tasten kommen zusätzlich als Tastendruck an
+      // (Steuerkreuz = Pfeiltasten, A = Enter …). Die Gamepad-Schnittstelle wertet sie bereits aus –
+      // hier verschlucken, sonst doppelte Bestätigung, Fokussprünge und Gerätewechsel auf „Tastatur“.
+      if (this.padRecent() && this.isPadKey(e)) { e.preventDefault(); e.stopPropagation(); return; }
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
       if (e.code === 'Tab' || e.code === 'Space' || e.code === 'CapsLock') e.preventDefault();
       this.device = 'keyboard';
       this.down.add(e.code);
       if (this.onKey) this.onKey(e.code, true);
     });
-    window.addEventListener('keyup', (e) => { this.down.delete(e.code); });
+    window.addEventListener('keyup', (e) => { this.down.delete(e.code); if (this.padRecent() && this.isPadKey(e)) e.preventDefault(); });
+    this.padT = -1e9;
     window.addEventListener('blur', () => this.releaseAll());
     window.addEventListener('gamepadconnected', () => { this.device = 'gamepad'; });
     window.addEventListener('gamepaddisconnected', (e) => { if (e && e.gamepad && this.gpCal) delete this.gpCal[e.gamepad.index]; });
     // Touchgerät: Bedienfläche von Anfang an zeigen; Maus-Ersatzereignisse nach Berührungen ignorieren
     this.lastTouch = 0;
     const touchOn = () => { this.lastTouch = performance.now(); this.device = 'touch'; document.body.classList.add('touchmode'); };
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touchmode');
+    let tv = /Android TV|AFT[A-Z]|BRAVIA|SMART-TV|SmartTV|GoogleTV|\bTV\b/i.test(navigator.userAgent);
+    try { if (window.AndroidApp && window.AndroidApp.isTv) tv = tv || !!window.AndroidApp.isTv(); } catch (_) { /* ältere App */ }
+    this.isTv = tv;
+    if (!tv && navigator.maxTouchPoints > 0) document.body.classList.add('touchmode');
     window.addEventListener('touchstart', touchOn, { passive: true, capture: true });
     window.addEventListener('mousemove', (e) => { if (performance.now() - this.lastTouch > 1500 && (Math.abs(e.movementX) + Math.abs(e.movementY) > 0) && !('ontouchstart' in window)) document.body.classList.remove('touchmode'); });
     canvas.addEventListener('mousedown', (e) => {
@@ -98,6 +107,11 @@ export class Input {
   }
 
   refresh() { this.binds = resolveBinds(this.settings); }
+  padRecent() { return performance.now() - this.padT < 1500; }
+  isPadKey(e) {
+    const c = e.code || '', k = e.key || '';
+    return /^Arrow|^Enter$|^NumpadEnter$|^Space$|^Escape$|^Gamepad|^MediaPlay|^GoBack$|^BrowserBack$/.test(c) || c === '' || k === 'Unidentified' || /^Gamepad|^Enter$|^Escape$/.test(k) || (e.keyCode >= 96 && e.keyCode <= 110) || e.keyCode === 4;
+  }
   releaseAll() { this.down.clear(); this.touchAct.clear(); }
 
   lock() {
@@ -188,7 +202,7 @@ export class Input {
       if (gp.mapping !== 'standard' && ax.length >= 6 && Math.abs(cal.rest[2]) > 0.3 && Math.abs(cal.rest[3]) < 0.3) { ri = 3; rj = 5; }
       const sx = A(0), sy = A(1), rx = A(ri), ry = A(rj);
       const any = Math.abs(sx) + Math.abs(sy) + Math.abs(rx) + Math.abs(ry) > 0.2 || gp.buttons.some((x) => x.pressed);
-      if (any) this.device = 'gamepad';
+      if (any) { this.device = 'gamepad'; this.padT = performance.now(); document.body.classList.remove('touchmode'); }
       mx += sx; my += -sy;
       const sens = 2.6 * (this.settings.sensitivity || 1);
       lx += Math.sign(rx) * rx * rx * sens; ly += Math.sign(ry) * ry * ry * sens * 0.75;

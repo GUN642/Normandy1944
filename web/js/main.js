@@ -813,6 +813,8 @@ class Game {
     if (id) { const el = $('s-' + id); if (el) el.classList.remove('hidden'); }
     if (id === 'menu') this.renderMainInfo();
     this.menuFocus = 0;
+    document.querySelectorAll('.gpf').forEach((b) => b.classList.remove('gpf'));
+    if (this.input && this.input.device === 'gamepad' && id) setTimeout(() => { const f = [...document.querySelectorAll(this.menuSel())].find((b) => b.offsetParent); if (f) f.classList.add('gpf'); }, 0);
   }
 
   renderMainInfo() {
@@ -1072,24 +1074,51 @@ class Game {
   }
 
   // Gamepad-Navigation in Menüs
+  menuSel() { return ['button:not([disabled])', 'select', 'input[type=range]', 'input[type=checkbox]', 'a.btn:not(.hidden)', 'input[type=text]', 'input:not([type])'].map((x) => '.screen:not(.hidden) ' + x).join(', '); }
+
   menuGamepad() {
     const m = this.input.gpMenu;
     if (!m) return;
-    const btns = [...document.querySelectorAll('.screen:not(.hidden) button:not([disabled]), .screen:not(.hidden) select')].filter((b) => b.offsetParent);
+    const btns = [...document.querySelectorAll(this.menuSel())].filter((b) => b.offsetParent);
     if (!btns.length) return;
     const now = performance.now();
-    // Richtung: erster Schritt sofort, Wiederholung erst nach 0,45 s, dann alle 0,18 s
-    const dir = m.down || m.right ? 1 : m.up || m.left ? -1 : 0;
-    let moved = false;
-    if (dir !== this._gpDir) { this._gpDir = dir; if (dir) { this.menuFocus = (this.menuFocus + dir + btns.length) % btns.length; moved = true; this._gpRep = now + 450; } }
-    else if (dir && now > this._gpRep) { this.menuFocus = (this.menuFocus + dir + btns.length) % btns.length; moved = true; this._gpRep = now + 180; }
-    if (!moved && this._gpT && now - this._gpT < 180) return;
-    if (moved) { /* Fokus unten setzen */ }
-    else if (m.ok && !this._gpOk) { btns[this.menuFocus % btns.length].click(); this._gpT = now + 150; }
-    else if (m.start && this.state === 'paused' && !this._gpOk) this.pause(false);
-    else if (m.back && !this._gpOk) { const bk = [...document.querySelectorAll('.screen:not(.hidden) .back')].find((b) => b.offsetParent); if (bk) { bk.click(); this._gpT = now + 150; } }
+    if (this.menuFocus >= btns.length) this.menuFocus = 0;
+    const cur = btns[this.menuFocus];
+    // Auswahllisten und Regler: links/rechts ändern den Wert, hoch/runter wechseln das Element
+    const adjust = cur && (cur.tagName === 'SELECT' || cur.type === 'range');
+    const vdir = m.down ? 1 : m.up ? -1 : 0, hdir = m.right ? 1 : m.left ? -1 : 0;
+    const dir = adjust ? vdir : vdir || hdir;
+    const hv = adjust ? hdir : 0;
+    const step = (key, d, act) => {
+      if (d !== this[key]) { this[key] = d; if (d) { act(d); this[key + 'R'] = now + 450; return true; } return false; }
+      if (d && now > this[key + 'R']) { act(d); this[key + 'R'] = now + 160; return true; }
+      return false;
+    };
+    let moved = step('_gpDir', dir, (d) => { this.menuFocus = (this.menuFocus + d + btns.length) % btns.length; });
+    step('_gpH', hv, (d) => {
+      if (cur.tagName === 'SELECT') cur.selectedIndex = Math.max(0, Math.min(cur.options.length - 1, cur.selectedIndex + d));
+      else { const st = +cur.step || 1; cur.value = Math.max(+cur.min, Math.min(+cur.max, +cur.value + d * st)); cur.dispatchEvent(new Event('input', { bubbles: true })); }
+      cur.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    if (!moved && this._gpT && now - this._gpT < 180) { this._gpOk = m.ok || m.start || m.back; return; }
+    if (!moved) {
+      if (m.ok && !this._gpOk && cur) {
+        if (cur.type === 'checkbox') { cur.checked = !cur.checked; cur.dispatchEvent(new Event('change', { bubbles: true })); }
+        else if (cur.tagName === 'INPUT' && cur.type !== 'range') cur.focus();
+        else if (cur.tagName !== 'SELECT' && cur.type !== 'range') cur.click();
+        this._gpT = now + 150;
+      } else if (m.start && this.state === 'paused' && !this._gpOk) this.pause(false);
+      else if (m.back && !this._gpOk) { const bk = [...document.querySelectorAll('.screen:not(.hidden) .back, .screen:not(.hidden) #set-back')].find((b) => b.offsetParent); if (bk) { bk.click(); this._gpT = now + 150; } }
+    }
     this._gpOk = m.ok || m.start || m.back;
-    if (moved) { this._gpT = now; btns.forEach((b) => b.classList.remove('gpf')); const b = btns[this.menuFocus % btns.length]; b.classList.add('gpf'); b.focus(); }
+    if (moved) {
+      this._gpT = now;
+      btns.forEach((b) => b.classList.remove('gpf'));
+      const b = btns[this.menuFocus];
+      b.classList.add('gpf');
+      try { b.focus({ preventScroll: false }); } catch (_) { b.focus(); }
+      b.scrollIntoView({ block: 'nearest' });
+    }
   }
 }
 
