@@ -366,7 +366,46 @@ class Game {
     this.hud.damage(a, d);
     this.shake(Math.min(0.5, d / 80));
     this.audio.play('hit', null, 0.6, 0.6, { verb: false });
-    if (p.hp <= 0) this.playerDied(owner, cause);
+    if (p.hp <= 0) {
+      // Kopftreffer, Sturz und schwere Explosionen töten; sonst meist kampfunfähig – Kameraden können helfen
+      if (!head && !cause && Math.random() < (blast ? 0.4 : 0.8)) this.playerDown(owner);
+      else this.playerDied(owner, cause);
+    }
+  }
+
+  playerDown(owner) {
+    const p = this.player;
+    p.alive = false; p.downed = true; p.hp = 0; p.bleed = 45; p.medic = null; p.downOwner = owner;
+    p.dragging = null;
+    this.deadT = 0;
+    this.input.clearToggles();
+    this.hud.warn(T('Verwundet! Warte auf einen Sanitäter …', 'Wounded! Waiting for a medic …'));
+    this.audio.concussion(0.7);
+    if (this.net && !this.net.isHost) this.net.send({ t: 'p', s: this.net.playerState() });
+  }
+
+  downedUpdate(dt) {
+    const p = this.player;
+    p.bleed -= dt;
+    this.deadT += dt;
+    this.hud.flashT = Math.max(this.hud.flashT, 0.25);
+    const medic = p.medic && p.medic.alive ? p.medic : null;
+    const md = medic ? Math.round(medic.pos.distanceTo(p.pos)) : null;
+    const giveUp = this.input.pressed('jump') || this._giveUp;
+    this._giveUp = false;
+    const txt = `<h2>${T('Verwundet', 'Wounded')}</h2><p>${medic ? T(`Sanitäter ${esc(medic.name)} kommt (${md} m)`, `Medic ${esc(medic.name)} is coming (${md} m)`) : T('Ruf nach einem Sanitäter …', 'Calling for a medic …')}</p><p>${T('Verblutet in', 'Bleeding out in')} ${Math.max(0, Math.ceil(p.bleed))} s</p><div class="clsrow"><button data-giveup="1">${T('Aufgeben (Leertaste / B)', 'Give up (Space / B)')}</button></div>`;
+    this.hud.respawn(true, txt);
+    if (!this._guBound) { this._guBound = true; $('respawn').addEventListener('pointerdown', (e) => { if (e.target.closest('button[data-giveup]')) { e.preventDefault(); this._giveUp = true; } }); }
+    if (p.bleed <= 0 || (giveUp && this.deadT > 0.8)) { p.downed = false; this.hud.respawn(false); this.playerDied(p.downOwner, null); }
+  }
+
+  revivePlayer(by) {
+    const p = this.player;
+    if (!p.downed) return;
+    p.downed = false; p.alive = true; p.hp = 40; p.lastHurt = this.time; p.medic = null;
+    this.hud.respawn(false);
+    this.hud.toast(T(`${by} hat Sie verarztet`, `${by} patched you up`));
+    this.audio.play('mag', null, 0.4);
   }
   applyNetDamage(m) {
     const dir = new THREE.Vector3(m.r ? m.r[0] : 0, 0, m.r ? m.r[1] : 0);
@@ -484,7 +523,8 @@ class Game {
       run('Spieler', () => p.update(dt, I));
       if (!this.radioOpen) run('Waffe', () => p.weaponUpdate(dt, I));
       run('Interaktion', () => this.interactions(dt, I));
-    } else run('Wiedereinstieg', () => this.deadUpdate(dt));
+    } else if (p.downed) run('Verwundet', () => this.downedUpdate(dt));
+    else run('Wiedereinstieg', () => this.deadUpdate(dt));
     // Gefallen-Anzeige darf nie stehen bleiben, solange man lebt
     if (p.alive && !this.hud.el.respawn.classList.contains('hidden')) this.hud.respawn(false);
     const host = !this.net || this.net.isHost;
@@ -544,17 +584,53 @@ class Game {
   // ------------------------------------------------------------ Interaktion, Funk, Tod
   interactions(dt, inp) {
     const p = this.player;
-    const act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || this.ammoAction(p));
+    const med = p.inBoat || p.chute ? null : this.medAction(p);
+    this.medicContext = !!med || !!p.dragging;
+    // Ziehen: H (Verband-Taste) packt den Verwundeten bzw. lässt ihn los
+    if (inp.pressed('heal')) {
+      if (p.dragging) { p.dragging = null; this.hud.toast(T('Losgelassen', 'Released')); }
+      else if (med && med.u && med.kind === 'revive' && (!this.net || this.net.isHost)) { p.dragging = med.u; p.ads = 0; this.hud.toast(T('Ziehe Verwundeten – H loslassen', 'Dragging the wounded – H to release')); }
+    }
+    if (p.dragging && (!p.dragging.downed || p.dragging.pos.distanceTo(p.pos) > 4)) p.dragging = null;
+    const act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || med || this.ammoAction(p));
     this.interactHint = act;
     if (act && inp.held('use')) {
       this.holdE += dt;
       if (this.holdE >= act.time) {
         this.holdE = 0;
         if (act.kind === 'ammo') this.takeAmmo(act);
+        else if (act.kind === 'revive') {
+          if (p.dragging === act.u) p.dragging = null;
+          if (!this.net || this.net.isHost) this.units.revive(act.u, 55); else this.net.send({ t: 'rev', u: act.u.uid });
+          this.score(25, T('Kamerad verarztet', 'Comrade patched up'));
+        } else if (act.kind === 'reviveP') { this.net && (this.net.isHost ? this.net.onHost(0, { t: 'rvp', p: act.av.pid }) : this.net.send({ t: 'rvp', p: act.av.pid })); this.score(25, T('Kamerad verarztet', 'Comrade patched up')); }
+        else if (act.kind === 'bandage') { p.bandages--; act.u.hp = Math.min(100, act.u.hp + 50); this.hud.toast(T('Kamerad verbunden', 'Comrade bandaged')); }
         else if (!this.net || this.net.isHost) this.missions.interact(act, p.team);
         else this.net.send({ t: 'int', k: act.kind, id: act.tg.id });
       }
     } else this.holdE = 0;
+  }
+
+  // Verwundete Kameraden: verarzten (E halten), ziehen (H); leicht Verletzte verbinden (kostet einen Verband)
+  medAction(p) {
+    let best = null, bd = 2.2, kind = null;
+    for (const u of this.units.list) {
+      if (u.team !== p.team || u.inBoat) continue;
+      const d = Math.hypot(u.pos.x - p.pos.x, u.pos.z - p.pos.z);
+      if (d > bd && p.dragging !== u) continue;
+      if (u.downed) { bd = Math.min(d, bd); best = u; kind = 'revive'; }
+      else if (u.alive && u.hp < 60 && p.bandages > 0 && kind !== 'revive' && d < bd) { bd = d; best = u; kind = 'bandage'; }
+    }
+    if (p.dragging && p.dragging.downed) { best = p.dragging; kind = 'revive'; }
+    for (const av of this.avatars.values()) {
+      if (!av.downed || av.team !== p.team) continue;
+      const d = Math.hypot(av.pos.x - p.pos.x, av.pos.z - p.pos.z);
+      if (d < bd) return { kind: 'reviveP', av, text: T(`E halten: ${av.name} verarzten`, `Hold E: patch up ${av.name}`), time: 3.5 };
+    }
+    if (!best) return null;
+    if (kind === 'bandage') return { kind, u: best, text: T('E halten: Kamerad verbinden (Verband)', 'Hold E: bandage comrade'), time: 2 };
+    const canDrag = !this.net || this.net.isHost;
+    return { kind, u: best, text: T('E halten: verarzten', 'Hold E: patch up') + (canDrag ? (p.dragging ? T(' · H: loslassen', ' · H: let go') : T(' · H: in Deckung ziehen', ' · H: drag to cover')) : ''), time: 3.5 };
   }
 
   // Munition: lebender Kamerad (alle 90 s), Funker (füllt auf) oder Gefallener (einmal)
@@ -566,7 +642,7 @@ class Game {
       const d = Math.hypot(u.pos.x - p.pos.x, u.pos.z - p.pos.z);
       if (d > bd || Math.abs(u.pos.y - p.pos.y) > 1.5 || u.inBoat) continue;
       if (u.alive && (u.team !== p.team || u.lost || (u.ammoT && this.time < u.ammoT))) continue;
-      if (!u.alive && u.looted) continue;
+      if (!u.alive && (u.looted || u.downed)) continue;
       bd = d; best = u;
     }
     if (!best) return null;

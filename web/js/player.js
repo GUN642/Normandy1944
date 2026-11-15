@@ -115,7 +115,7 @@ export class Player {
     this.nextFire = 0; this.reloading = 0; this.boltT = 0; this.burstHeld = false;
     this.recoil = 0; this.recoilYaw = 0; this.recoilDebt = 0;
     this.onGround = true; this.inBoat = null; this.chute = null; this.climbing = false;
-    this.lastShot = -10; this.charge = null; this.lastHurt = -10;
+    this.lastShot = -10; this.charge = null; this.lastHurt = -10; this.downed = false; this.dragging = null; this.medic = null;
     this.vel.set(0, 0, 0);
     this.vm.set(this.weapons[0], team);
     this.radio = !!CLASSES[cls].radio;
@@ -224,6 +224,7 @@ export class Player {
     if (depth > 0.5) sp *= swim ? 0.45 : clamp(1.1 - depth * 0.5, 0.45, 1);
     if (this.W.mass > 8 && !this.ads) sp *= 0.88;
     if (this.healing > 0) sp *= 0.4;
+    if (this.dragging) { sp = Math.min(sp, 1.5); this.sprinting = false; if (this.stance === 2) this.stance = 1; }
     const f = _v.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)), r = _d.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     const mx = inp.move.x, my = inp.move.y;
     const ml = Math.min(1, Math.hypot(mx, my));
@@ -306,7 +307,7 @@ export class Player {
   // ------------------------------------------------------------ Waffen
   weaponUpdate(dt, inp) {
     const g = this.g;
-    if (!this.alive || this.chute || this.climbing) { this.ads = Math.max(0, this.ads - dt * 6); return; }
+    if (!this.alive || this.chute || this.climbing || this.dragging) { this.ads = Math.max(0, this.ads - dt * 6); return; }
     const W = this.W, A = this.ammo[this.wid];
     const swim = g.world.waterDepth(this.pos.x, this.pos.z) > 1.45;
     // Waffenwahl
@@ -331,7 +332,7 @@ export class Player {
     if (inp.pressed('reload') && !W.grenade && A.mag < W.mag && A.res > 0) this.startReload();
     if (this.boltT > 0) { this.boltT -= dt; }
     // Verbinden
-    if (inp.pressed('heal') && this.bandages > 0 && this.hp < 100 && this.healing <= 0) { this.bandages--; this.healing = 3; g.hud.toast(T('Verband angelegt', 'Bandage applied')); }
+    if (inp.pressed('heal') && !g.medicContext && this.bandages > 0 && this.hp < 100 && this.healing <= 0) { this.bandages--; this.healing = 3; g.hud.toast(T('Verband angelegt', 'Bandage applied')); }
     // Feuern
     const trig = inp.held('fire') || (this.quickNade && inp.held('grenade'));
     if (W.grenade) {

@@ -38,7 +38,11 @@ Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbo
 
 - **Wiedereinstieg vorn:** im freien Spiel und Mehrspieler bei den vordersten Kameraden (nicht im Feindkontakt).
 - **Munition teilen:** E halten neben einem Kameraden (alle 90 s), bei einem Funker (füllt auf) oder bei Gefallenen.
-- **Markierungen:** blauer Punkt über Kameraden, roter Punkt über sichtbaren Feinden (abschaltbar).
+- **Markierungen:** blaues Dreieck über Kameraden, rotes über sichtbaren Feinden, gelbes mit Kreuz über Verwundeten – feste Bildschirmgröße, auch auf dem Fernseher gut sichtbar (abschaltbar).
+- **Verwundete:** Wer nicht in den Kopf oder durch eine Explosion getroffen wird, ist oft nur kampfunfähig, blutet und
+  stirbt ohne Hilfe nach rund einer Minute. E halten: verarzten · H: in Deckung ziehen · leicht Verletzte verbinden.
+  KI-Kameraden verarzten sich gegenseitig und kommen auch zum Spieler; im Mehrspieler können sich Spieler gegenseitig retten.
+  Blut an der Einschussstelle, Blutlache, Verband nach dem Verarzten.
 - **Zielhilfe** für Touch und Controller wie im Medevac-sim; Controller inkl. Switch Pro/Joy-Con und Android TV.
 
 ## Waffen (historische Kenndaten, detaillierte 3D-Modelle)

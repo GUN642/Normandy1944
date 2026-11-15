@@ -284,6 +284,7 @@ export class Avatar {
     const wid = WIDS[s[6]];
     if (wid && wid !== this.wid) { this.wid = wid; this.rig.setWeapon(wid); }
     const alive = !!s[7];
+    this.downed = !!s[10];
     if (this.alive && !alive) this.deadT = 0;
     this.alive = alive; this.visible = true;
   }
@@ -298,10 +299,11 @@ export class Avatar {
     r.root.position.copy(this.pos); r.root.rotation.y = this.yaw;
     this.tag.visible = this.team === this.g.player.team && this.alive;
     // Feindliche Spieler (Gegeneinander): roter Punkt, wenn sichtbar
-    if (!this.dot) { this.dot = new THREE.Sprite(markMat('red')); this.dot.center.set(0.5, 0); this.dot.scale.set(0.016, 0.016, 1); this.dot.position.y = 2.1; r.root.add(this.dot); }
+    if (!this.dot) { this.dot = new THREE.Sprite(markMat('red')); this.dot.center.set(0.5, 0); this.dot.scale.set(0.1, 0.1, 1); this.dot.position.y = 2.1; r.root.add(this.dot); }
     if (this.team !== this.g.player.team && this.alive && this.g.settings.markers !== false) {
       if (!this.dotT || this.g.time > this.dotT) { this.dotT = this.g.time + 0.4; const c = this.chest(new THREE.Vector3()); this.dotVis = this.g.world.los(this.g.camera.position, c) && !this.g.smokeBlocks(this.g.camera.position, c); }
       this.dot.visible = !!this.dotVis || (this.lastShot && this.g.time - this.lastShot < 3);
+      const sc = ((22 + innerHeight * 0.012) * 2) / innerHeight; this.dot.scale.set(sc, sc, 1);
     } else this.dot.visible = false;
     if (this.alive) { r.setLod(0); r.pose(this.speed, this.stance, this.pitch, dt); }
     else { this.deadT = (this.deadT || 0) + dt; r.pose(0, 0, 0, dt, Math.min(1, this.deadT * 2)); }
@@ -337,7 +339,7 @@ export class Net {
   // ------------------------------------------------------------ Ereignisse (vom Spiel aufgerufen)
   playerState() {
     const p = this.g.player;
-    return [r1(p.pos.x), r1(p.pos.y), r1(p.pos.z), r2(p.yaw), r2(p.pitch), p.stance, WIDS.indexOf(p.wid), p.alive ? 1 : 0, p.team === 'de' ? 1 : 0, p.chute ? 1 : 0];
+    return [r1(p.pos.x), r1(p.pos.y), r1(p.pos.z), r2(p.yaw), r2(p.pitch), p.stance, WIDS.indexOf(p.wid), p.alive ? 1 : 0, p.team === 'de' ? 1 : 0, p.chute ? 1 : 0, p.downed ? 1 : 0];
   }
   fire(o, d, wid, tracer) {
     const m = { t: 'ff', o: [r2(o.x), r2(o.y), r2(o.z)], d: [r4(d.x), r4(d.y), r4(d.z)], w: WIDS.indexOf(wid), tr: tracer ? 1 : 0, p: this.myId };
@@ -457,6 +459,13 @@ export class Net {
         if (m.p === 0) g.applyNetDamage(msg); else this.sendTo(m.p, msg);
         break;
       }
+      case 'rev': { const u = g.units.byId.get(m.u); if (u && u.downed) g.units.revive(u, 55); break; }
+      case 'rvp': {
+        // ein Spieler verarztet einen anderen Spieler
+        const from = this.players.get(p) || { name: g.playerName() };
+        if (m.p === 0) g.revivePlayer(from.name); else this.sendTo(m.p, { t: 'revived', n: from.name });
+        break;
+      }
       case 'int': {
         const tg = g.world.targets[m.id];
         const pl = this.players.get(p);
@@ -496,6 +505,8 @@ export class Net {
       case 'chg': { const tg = g.world.targets[m.id]; if (tg) { tg.charging = false; g.missions.placeCharge(tg, g.player.team === 'us' ? 'none' : 'none', false); } break; }
       case 'tgd': { const tg = g.world.targets[m.id]; if (tg && !tg.destroyed) { if (tg.kind === 'flag') g.missions.raiseFlag(tg); else g.missions.destroyTarget(tg, 'none'); } break; }
       case 'pdmg': g.applyNetDamage(m); break;
+      case 'revived': g.revivePlayer(String(m.n || '?').slice(0, 20)); break;
+      case 'rvu': { const u = g.units.byId.get(m.u); if (u && u.pool) { g.scene.remove(u.pool); u.pool = null; } break; }
       case 'chat': g.comms.onClientChat(m); break;
       case 'vids': g.comms.onVids(m.l); break;
       case 'ptt': g.comms.onPtt(m.p, !!m.on, String(m.n || '').slice(0, 16)); break;

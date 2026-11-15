@@ -63,7 +63,7 @@ export class Unit {
   chest(out) { return out.set(this.pos.x, this.pos.y + (this.stance === 2 ? 0.3 : this.stance === 1 ? 0.8 : 1.25), this.pos.z); }
   fwd(out) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
 
-  remove() { this.rig.dispose(); if (this.chute) this.sys.g.scene.remove(this.chute); if (this.marker) this.sys.g.scene.remove(this.marker); }
+  remove() { this.rig.dispose(); if (this.chute) this.sys.g.scene.remove(this.chute); if (this.marker) this.sys.g.scene.remove(this.marker); if (this.pool) this.sys.g.scene.remove(this.pool); }
 }
 
 // ------------------------------------------------------------------ Panzer
@@ -228,7 +228,44 @@ export class Units {
       const src = this.ownerEntity(owner);
       if (src && src.team !== u.team) { u.target = src; u.targetSeen = this.g.time; }
     }
+    if (dir && this.g.camera.position.distanceTo(u.pos) < 80) this.bloodWound(u, dir, head);
     if (u.hp <= 0) this.kill(u, owner, head, dir, blast);
+  }
+
+  // Blutfleck an der Einschussstelle (vorn bzw. hinten am Körper, je nach Schussrichtung)
+  bloodWound(u, dir, head) {
+    const B = bloodAssets();
+    u.wounds = u.wounds || [];
+    if (u.wounds.length >= 4) return;
+    const fx = -Math.sin(u.yaw), fz = -Math.cos(u.yaw);
+    const fromBack = dir.x * fx + dir.z * fz > 0;     // Kugel fliegt in Blickrichtung = Treffer von hinten
+    const m = new THREE.Mesh(B.geo, B.mat);
+    const s2 = 0.09 + rand() * 0.07;
+    m.scale.set(s2, s2, 1);
+    const leg = !head && rand() < 0.3;
+    if (leg) { const th = u.rig.legs[rand() < 0.5 ? 0 : 1].th; m.position.set((rand() - 0.5) * 0.06, -0.15 - rand() * 0.15, fromBack ? 0.082 : -0.082); if (fromBack) m.rotation.y = Math.PI; th.add(m); }
+    else { m.position.set((rand() - 0.5) * 0.16, 0.12 + rand() * 0.3, fromBack ? 0.115 : -0.115); if (fromBack) m.rotation.y = Math.PI; u.rig.torso.add(m); }
+    u.wounds.push(m);
+  }
+  bloodPool(u) {
+    const B = bloodAssets(), W = this.g.world;
+    if (u.pool) return;
+    const m = new THREE.Mesh(B.geo, B.pool);
+    m.rotation.x = -Math.PI / 2; m.rotation.z = rand() * 6;
+    m.position.set(u.pos.x, W.h(u.pos.x, u.pos.z) + 0.04, u.pos.z);
+    m.scale.set(0.2, 0.2, 1);
+    this.g.scene.add(m);
+    u.pool = m; u.poolS = 0.2;
+  }
+  // Wiederbelebt / verarztet: Verband an der Wunde, aufstehen
+  revive(u, hp = 45) {
+    if (!u.downed) return;
+    u.downed = false; u.alive = true; u.hp = hp; u.deadT = 0; u.medicFor = null;
+    u.stance = 1; u.suppress = 0.5; u.target = null;
+    u.rig.body.rotation.set(0, 0, 0); u.rig.body.position.set(0, 0, 0); u.rig.hips.position.y = 0.95;
+    const B = bloodAssets();
+    if (!u.bandaged) { const band = new THREE.Mesh(new THREE.CylinderGeometry(0.175, 0.175, 0.07, 12), B.band); band.scale.z = 0.7; band.position.y = 0.3; u.rig.torso.add(band); u.bandaged = true; }
+    if (this.g.net && this.g.net.isHost) this.g.net.send({ t: 'rvu', u: u.uid });
   }
 
   ownerEntity(o) {
@@ -239,9 +276,13 @@ export class Units {
     return null;
   }
 
-  kill(u, owner, head, dir, blast) {
+  // Kampfunfähig (verwundet): liegt, blutet, stirbt ohne Hilfe nach ca. 60 s; Kopftreffer und Volltreffer töten sofort
+  kill(u, owner, head, dir, blast, forceDead = false) {
+    const canDown = !forceDead && !head && !u.static && !u.inBoat && !u.downed && rand() < (blast ? 0.25 : 0.6);
     u.alive = false; u.hp = 0;
     u.deadT = 0;
+    if (canDown) { u.downed = true; u.bleed = 50 + rand() * 25; this.bloodPool(u); }
+    else u.downed = false;
     u.fallDir = dir ? Math.atan2(dir.x, dir.z) : 0;
     this.g.onUnitKilled(u, owner, head);
     if (this.g.net && this.g.net.isHost) this.g.net.unitKilled(u);
@@ -279,8 +320,8 @@ export class Units {
     const g = this.g, out = this._en || (this._en = []);
     out.length = 0;
     for (const u of this.list) if (u.alive && u.team !== team && !u.inBoat) out.push(u);
-    if (g.player.alive && g.player.team !== team && !g.player.inBoat) out.push(g.player);
-    for (const av of g.avatars.values()) if (av.alive && av.visible && av.team !== team) out.push(av);
+    if (g.player.alive && !g.player.downed && g.player.team !== team && !g.player.inBoat) out.push(g.player);
+    for (const av of g.avatars.values()) if (av.alive && !av.downed && av.visible && av.team !== team) out.push(av);
     return out;
   }
 
@@ -326,6 +367,7 @@ export class Units {
       for (const u of sq.units) { u.path = sq.path; u.pathI = 0; }
     }
     for (const sq of this.squads) this.updateSquad(sq, dt);
+    this.assignMedics(dt);
     for (const u of this.list) {
       if (!u.alive) { this.animateDead(u, dt); continue; }
       if (u.inBoat) { this.render(u, dt); continue; }
@@ -336,7 +378,7 @@ export class Units {
     for (const t of this.tanks) this.updateTank(t, dt);
     // Leichen nach einiger Zeit entfernen (Speicher/Leistung)
     if (this.list.length > 140) {
-      const i = this.list.findIndex((u) => !u.alive && u.deadT > 30);
+      const i = this.list.findIndex((u) => !u.alive && !u.downed && u.deadT > 30);
       if (i >= 0) { const u = this.list[i]; u.remove(); this.list.splice(i, 1); this.byId.delete(u.uid); }
     }
   }
@@ -404,8 +446,66 @@ export class Units {
     }
   }
 
+  // Sanitäter-Aufträge verteilen: nächster freier Kamerad läuft zum Verwundeten
+  assignMedics(dt) {
+    this.medT = (this.medT || 0) - dt;
+    if (this.medT > 0) return;
+    this.medT = 1.5;
+    const g = this.g;
+    const patients = this.list.filter((u) => u.downed && !u.medic);
+    // Spieler (und Mitspieler) am Boden
+    if (g.player.downed && !g.player.medic) patients.push(g.player);
+    for (const av of g.avatars.values()) if (av.downed && !av.medic) patients.push(av);
+    for (const pt of patients) {
+      if (g.player.dragging === pt) continue;
+      let best = null, bd = pt.isPlayer || pt.pid !== undefined ? 90 : 35;
+      for (const u of this.list) {
+        if (!u.alive || u.team !== pt.team || u.static || u.inBoat || u.lost || u.medicFor || u.chute) continue;
+        const busy = u.target && g.time - u.targetSeen < 2;
+        if (busy && !(pt.isPlayer || pt.pid !== undefined)) continue;
+        const d = u.pos.distanceTo(pt.pos);
+        if (d < bd) { bd = d; best = u; }
+      }
+      if (best) { best.medicFor = pt; best.medicT = 0; pt.medic = best; }
+    }
+  }
+
   updateUnit(u, dt) {
     const g = this.g, W = g.world, sq = u.squad;
+    // Sanitäter-Auftrag: zum Verwundeten laufen, 4 s verarzten
+    if (u.medicFor) {
+      const pt = u.medicFor;
+      const stillDown = pt.isPlayer ? pt.downed : pt.pid !== undefined ? pt.downed : pt.downed;
+      if (!stillDown) { if (pt.medic === u) pt.medic = null; u.medicFor = null; }
+      else {
+        const d = Math.hypot(pt.pos.x - u.pos.x, pt.pos.z - u.pos.z);
+        if (d > 1.4) {
+          if (!u.mpath || u.mpathT <= 0) { u.mpath = W.navLine(u.pos.x, u.pos.z, pt.pos.x, pt.pos.z) ? [[pt.pos.x, pt.pos.z]] : (W.findPath(u.pos.x, u.pos.z, pt.pos.x, pt.pos.z, 6000) || [[pt.pos.x, pt.pos.z]]); u.mpathI = 0; u.mpathT = 2; }
+          u.mpathT -= dt;
+          const p = u.mpath[Math.min(u.mpathI, u.mpath.length - 1)];
+          const dx = p[0] - u.pos.x, dz = p[1] - u.pos.z, dl = Math.hypot(dx, dz);
+          if (dl < 1.2 && u.mpathI < u.mpath.length - 1) u.mpathI++;
+          const sp = 3.4 * dt;
+          if (dl > 0.05) { u.pos.x += dx / dl * Math.min(dl, sp); u.pos.z += dz / dl * Math.min(dl, sp); u.yaw = lerpAngle(u.yaw, Math.atan2(-dx, -dz), dt * 6); }
+          W.collide(u.pos, 0.35, u.pos.y, u.pos.y + 1.7);
+          u.pos.y = W.groundAt(u.pos.x, u.pos.z, u.pos.y + 0.5);
+          u.speed = 3.4; u.stance = 0;
+          if (u.mpathT < -20) { if (pt.medic === u) pt.medic = null; u.medicFor = null; }   // kommt nicht hin
+        } else {
+          u.speed = 0; u.stance = 1;
+          u.yaw = lerpAngle(u.yaw, Math.atan2(-(pt.pos.x - u.pos.x), -(pt.pos.z - u.pos.z)), dt * 6);
+          u.medicT += dt;
+          if (u.medicT > 4) {
+            if (pt.isPlayer) g.revivePlayer(u.name);
+            else if (pt.pid !== undefined) { if (g.net) g.net.sendTo(pt.pid, { t: 'revived', n: u.name }); pt.downed = false; }
+            else this.revive(pt);
+            if (pt.medic === u) pt.medic = null;
+            u.medicFor = null;
+          }
+        }
+        return;
+      }
+    }
     u.suppress = Math.max(0, u.suppress - dt * 0.25);
     u.alert = Math.max(0, u.alert - dt * 0.02);
     u.firing = Math.max(0, u.firing - dt * 6);
@@ -734,7 +834,21 @@ export class Units {
 
   animateDead(u, dt) {
     u.deadT += dt;
-    if (u.marker) u.marker.visible = false;
+    if (u.downed) {
+      // ziehen: Verwundeter hängt hinter dem Spieler
+      const pl = this.g.player;
+      if (pl.dragging === u) {
+        const bx = pl.pos.x + Math.sin(pl.yaw) * 1.1, bz = pl.pos.z + Math.cos(pl.yaw) * 1.1;
+        u.pos.x += (bx - u.pos.x) * Math.min(1, dt * 8); u.pos.z += (bz - u.pos.z) * Math.min(1, dt * 8);
+        u.pos.y = this.g.world.groundAt(u.pos.x, u.pos.z, u.pos.y + 0.5);
+        u.yaw = pl.yaw + Math.PI;
+        u.rig.root.position.copy(u.pos); u.rig.root.rotation.y = u.yaw;
+        if (u.pool) u.pool.visible = false;
+      }
+      if (!this.g.net || this.g.net.isHost) { u.bleed -= dt * (pl.dragging === u ? 0.5 : 1); if (u.bleed <= 0) { u.downed = false; u.deadT = 0; if (u.marker) u.marker.visible = false; } }
+      if (u.pool && u.poolS < 1.3 && pl.dragging !== u) { u.poolS += dt * 0.04; u.pool.scale.set(u.poolS, u.poolS, 1); }
+      this.mark(u, this.g.camera.position.distanceTo(u.pos));
+    } else if (u.marker) u.marker.visible = false;
     if (u.deadT < 3) {
       u.rig.root.rotation.y = u.yaw;
       u.rig.pose(0, 0, 0, dt, Math.min(1, u.deadT * 2.2));
@@ -756,10 +870,10 @@ export class Units {
   // Markierung über dem Kopf: rot = Feind (nur wenn sichtbar oder gerade geschossen), blau = Kamerad
   mark(u, d) {
     const g = this.g;
-    const on = g.settings.markers !== false && u.alive && !u.inBoat;
+    const on = g.settings.markers !== false && (u.alive || (u.downed && u.team === g.player.team)) && !u.inBoat;
     let show = false;
     if (on) {
-      if (u.team === g.player.team) show = d < 250 && !u.lost;
+      if (u.team === g.player.team) show = (d < 250 && !u.lost) || (u.downed && d < 300);
       else {
         if (!u.markT || g.time > u.markT) {
           u.markT = g.time + 0.35 + Math.random() * 0.3;
@@ -775,12 +889,15 @@ export class Units {
       u.marker.center.set(0.5, 0);
       g.scene.add(u.marker);
     }
-    const want = u.team === g.player.team ? 'blue' : 'red';
+    const want = u.downed ? 'green' : u.team === g.player.team ? 'blue' : 'red';
     if (u.marker.material !== markMat(want)) u.marker.material = markMat(want);
     u.marker.visible = true;
-    u.marker.position.set(u.pos.x, u.pos.y + (u.stance === 2 ? 0.8 : u.stance === 1 ? 1.6 : 2.1), u.pos.z);
-    const k = Math.min(1, 0.6 + d / 200);
-    u.marker.scale.set(0.016 * k, 0.016 * k, 1);
+    u.marker.position.set(u.pos.x, u.pos.y + (u.downed ? 0.7 : u.stance === 2 ? 0.9 : u.stance === 1 ? 1.7 : 2.2), u.pos.z);
+    // Größe in Bildschirmanteilen; auf großen Bildschirmen (Fernseher) etwas größer, nah etwas kleiner
+    // feste Bildschirmgröße in Pixeln (unabhängig von Auflösung/Grafikstufe): ~27 px Handy, ~35 px Full-HD-Fernseher
+    const px = (22 + innerHeight * 0.012) * (g.settings.markerSize || 1) * (d < 15 ? 0.8 : 1);
+    const sc = (px * 2) / innerHeight;
+    u.marker.scale.set(sc, sc, 1);
   }
 
   // Für Clients: Puppen aus Schnappschuss
@@ -789,7 +906,7 @@ export class Units {
     for (const u of this.list) {
       if (!u.alive && u.deadT > 4) continue;
       out.push(u.uid, u.team === 'us' ? 0 : 1, ROLES.indexOf(u.role), Math.round(u.pos.x * 10) / 10, Math.round(u.pos.y * 10) / 10, Math.round(u.pos.z * 10) / 10,
-        Math.round(u.yaw * 100) / 100, Math.round(u.pitch * 100) / 100, u.stance | (u.alive ? 0 : 4) | (u.firing > 0.5 ? 8 : 0) | (u.chute ? 16 : 0), WIDS.indexOf(u.wid));
+        Math.round(u.yaw * 100) / 100, Math.round(u.pitch * 100) / 100, u.stance | (u.alive ? 0 : 4) | (u.firing > 0.5 ? 8 : 0) | (u.chute ? 16 : 0) | (u.downed ? 32 : 0), WIDS.indexOf(u.wid));
     }
     const T2 = this.tanks.map((t) => [t.id, t.type, t.team === 'us' ? 0 : 1, Math.round(t.pos.x * 10) / 10, Math.round(t.pos.z * 10) / 10, Math.round(t.yaw * 100) / 100, Math.round(t.turretYaw * 100) / 100, t.alive ? 1 : 0]);
     return { u: out, t: T2 };
@@ -817,7 +934,12 @@ export class Units {
       u.stance = fl & 3;
       const alive = !(fl & 4);
       if (u.alive && !alive) { u.alive = false; u.deadT = 0; }
+      if (!u.alive && alive && u.downed) { u.rig.body.rotation.set(0, 0, 0); u.rig.body.position.set(0, 0, 0); u.rig.hips.position.y = 0.95; }
       u.alive = alive;
+      const dn = !!(fl & 32);
+      if (dn && !u.downed) this.bloodPool(u);
+      if (!dn && u.pool) { this.g.scene.remove(u.pool); u.pool = null; }
+      u.downed = dn;
       u.firing = fl & 8 ? 1 : 0;
       u.netChute = !!(fl & 16);
     }
@@ -872,13 +994,32 @@ export const WIDS = Object.keys(WEAPONS);
 const MARKS = {};
 export function markMat(kind) {
   if (MARKS[kind]) return MARKS[kind];
-  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
   const x = c.getContext('2d');
-  const col = kind === 'red' ? '#ff3b2f' : '#3d8bff';
-  x.fillStyle = 'rgba(0,0,0,0.55)'; x.beginPath(); x.arc(16, 16, 11, 0, 7); x.fill();
-  x.fillStyle = col; x.beginPath(); x.arc(16, 16, 8, 0, 7); x.fill();
-  x.strokeStyle = 'rgba(255,255,255,0.8)'; x.lineWidth = 1.5; x.stroke();
-  return (MARKS[kind] = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true, fog: false }));
+  const col = kind === 'red' ? '#ff2a1a' : kind === 'green' ? '#ffd000' : '#2f86ff';
+  // nach unten zeigendes Dreieck mit dickem dunklem und weißem Rand (auf jedem Hintergrund sichtbar)
+  const tri = () => { x.beginPath(); x.moveTo(8, 10); x.lineTo(56, 10); x.lineTo(32, 54); x.closePath(); };
+  x.lineJoin = 'round';
+  tri(); x.lineWidth = 12; x.strokeStyle = 'rgba(0,0,0,0.85)'; x.stroke();
+  tri(); x.lineWidth = 5; x.strokeStyle = '#ffffff'; x.stroke();
+  tri(); x.fillStyle = col; x.fill();
+  if (kind === 'green') { x.fillStyle = '#c00'; x.fillRect(28, 14, 8, 24); x.fillRect(20, 22, 24, 8); }   // Verwundeter: rotes Kreuz
+  return (MARKS[kind] = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true, fog: false, toneMapped: false }));
+}
+
+// Blut und Verbände
+const BLOOD = {};
+function bloodAssets() {
+  if (BLOOD.mat) return BLOOD;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d');
+  for (let i = 0; i < 9; i++) { const g = x.createRadialGradient(32 + (Math.random() - 0.5) * 22, 32 + (Math.random() - 0.5) * 22, 1, 32, 32, 10 + Math.random() * 16); g.addColorStop(0, 'rgba(90,6,4,0.95)'); g.addColorStop(1, 'rgba(70,4,2,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); }
+  const t = new THREE.CanvasTexture(c);
+  BLOOD.mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, color: 0xffffff });
+  BLOOD.pool = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, color: 0xbbbbbb });
+  BLOOD.geo = new THREE.PlaneGeometry(1, 1);
+  BLOOD.band = new THREE.MeshLambertMaterial({ color: 0xe8e4da });
+  return BLOOD;
 }
 
 export function magCap(W) { return W.id === 'mg42' ? 75 : W.mag; }
