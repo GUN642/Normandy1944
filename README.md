@@ -19,6 +19,9 @@ Tastatur/Maus, Gamepad oder Touchscreen. Von **amerikanischer und deutscher Seit
 | 6 | **Der Damm von La Fière** | 6.–9.6. | Brücke mit Bazookas gegen Beutepanzer halten | Mit Panzern über den Damm angreifen |
 | 7 | **Carentan** | 12.6., 06:00 | MG-Nest, Marktplatz, Bahnhof | Fallschirmjäger-Regiment 6 verteidigt und setzt sich ab |
 | 8 | **Heckenkrieg – Höhe 192** | 11.–18.7. | Im Nebel Hecke um Hecke den Hang hinauf | Höhe halten, Gegenstoß |
+| + | **Utah Beach** | 6.6., 06:30 | Landung bei Tageslicht, Ufermauer, WN 5, Damm nach Pouppeville | Dünen halten |
+| + | **Operation Cobra – Marigny** | 25.–26.7. | Nach dem Bombenteppich über die Straße St-Lô–Périers, Panzer IV, Marigny | Panzer-Lehr-Division hält Hecken und Ort |
+| + | **Kessel von Falaise – Chambois** | 20.8. | Chambois mit dem Donjon gegen den Ausbruch halten | Fallschirmjäger brechen über die Dives aus |
 
 - **Kampagne:** je Seite eine eigene historische Reihenfolge, Missionen werden nacheinander freigeschaltet;
   nach jedem Sieg folgt der historische Ausgang (einschließlich Verlusten). Fällt man, übernimmt man den
@@ -30,6 +33,13 @@ Tastatur/Maus, Gamepad oder Touchscreen. Von **amerikanischer und deutscher Seit
 
 Personen sind erfunden (mit * markierte Namen an reale Kommandeure angelehnt); Einheiten, Orte, Zeiten und
 Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbole.
+
+## Komfort im Gefecht
+
+- **Wiedereinstieg vorn:** im freien Spiel und Mehrspieler bei den vordersten Kameraden (nicht im Feindkontakt).
+- **Munition teilen:** E halten neben einem Kameraden (alle 90 s), bei einem Funker (füllt auf) oder bei Gefallenen.
+- **Markierungen:** blauer Punkt über Kameraden, roter Punkt über sichtbaren Feinden (abschaltbar).
+- **Zielhilfe** für Touch und Controller wie im Medevac-sim; Controller inkl. Switch Pro/Joy-Con und Android TV.
 
 ## Waffen (historische Kenndaten, detaillierte 3D-Modelle)
 

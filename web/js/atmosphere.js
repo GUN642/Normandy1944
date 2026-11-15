@@ -233,6 +233,16 @@ export class Atmosphere {
         if (Math.hypot(x - g.camera.position.x, z - g.camera.position.z) > 70) this.impact(x, z, 6, 3.5, 'naval');
       }
     }
+    // Bombenteppich (Operation Cobra): Einschläge südlich der Straße in den ersten 45 Sekunden
+    if (this.amb.carpet && this.t < 45) {
+      T0.carpet = (T0.carpet ?? 0) - dt;
+      if (T0.carpet <= 0) {
+        T0.carpet = 0.22;
+        const x = (rand() - 0.5) * 860, z = 150 + rand() * 290;
+        const m = g.world.anchors.marigny;
+        if (!m || Math.hypot(x - m.x, z - m.z) > 70) this.impact(x, z, 4, 1 + rand(), 'support', { team: 'us', support: true });
+      }
+    }
     // Nebelwerfer-Salve
     if (this.amb.nebelwerfer) {
       T0.nw -= dt;

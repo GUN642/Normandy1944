@@ -6,7 +6,7 @@
 import * as THREE from './lib/three.module.min.js';
 import { SoldierRig } from './models.js';
 import { WEAPONS } from './weapons.js';
-import { uniformFor, WIDS, lerpAngle } from './units.js';
+import { uniformFor, WIDS, lerpAngle, markMat } from './units.js';
 import { T } from './i18n.js';
 
 export function androidTransport() {
@@ -297,6 +297,12 @@ export class Avatar {
     this.yaw = lerpAngle(this.yaw, this.tyaw ?? this.yaw, Math.min(1, dt * 12));
     r.root.position.copy(this.pos); r.root.rotation.y = this.yaw;
     this.tag.visible = this.team === this.g.player.team && this.alive;
+    // Feindliche Spieler (Gegeneinander): roter Punkt, wenn sichtbar
+    if (!this.dot) { this.dot = new THREE.Sprite(markMat('red')); this.dot.center.set(0.5, 0); this.dot.scale.set(0.016, 0.016, 1); this.dot.position.y = 2.1; r.root.add(this.dot); }
+    if (this.team !== this.g.player.team && this.alive && this.g.settings.markers !== false) {
+      if (!this.dotT || this.g.time > this.dotT) { this.dotT = this.g.time + 0.4; const c = this.chest(new THREE.Vector3()); this.dotVis = this.g.world.los(this.g.camera.position, c) && !this.g.smokeBlocks(this.g.camera.position, c); }
+      this.dot.visible = !!this.dotVis || (this.lastShot && this.g.time - this.lastShot < 3);
+    } else this.dot.visible = false;
     if (this.alive) { r.setLod(0); r.pose(this.speed, this.stance, this.pitch, dt); }
     else { this.deadT = (this.deadT || 0) + dt; r.pose(0, 0, 0, dt, Math.min(1, this.deadT * 2)); }
   }

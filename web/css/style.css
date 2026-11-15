@@ -247,3 +247,6 @@ body.touchmode #feed { top: 136px; }
 #apk-link { text-decoration: none; font-size: 14px; padding: 8px 16px; background: linear-gradient(180deg, #4a5a34, #34401f); }
 
 .gpf { outline: 3px solid var(--acc) !important; outline-offset: 2px; }
+#errline { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 90vw; font: 11px var(--type); color: #ffb0a0; background: rgba(40, 0, 0, 0.7); padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 12; }
+#mp-lan { max-width: 900px; margin: 4px 0 10px; padding: 8px 10px; border: 1px solid var(--line); background: rgba(40, 50, 30, 0.35); }
+#mp-lanlist button { font-size: 15px; }

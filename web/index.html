@@ -48,6 +48,7 @@
   <div id="mapview" class="hidden"><canvas width="600" height="600"></canvas></div>
   <div id="respawn" class="hidden"><div id="resp-text"></div></div>
   <div id="fps" class="hidden"></div>
+  <div id="errline" class="hidden"></div>
 
   <!-- Touch-Steuerung -->
   <div id="touch">
@@ -111,6 +112,7 @@
 <div id="s-mp" class="screen hidden">
   <h2 data-en="Multiplayer">Mehrspieler</h2>
   <label class="wide"><span data-en="Your name">Ihr Name</span><input id="mp-name" maxlength="16"></label>
+  <div id="mp-lan" class="hidden"><h3 data-en="Games on this Wi-Fi">Spiele in diesem WLAN</h3><div id="mp-lanlist"></div><p id="mp-lanstat" class="note"></p></div>
   <div class="cols">
     <div class="col">
       <h3 data-en="Host a game">Spiel eröffnen</h3>
@@ -123,11 +125,10 @@
     </div>
     <div class="col">
       <h3 data-en="Join">Beitreten</h3>
-      <label><span data-en="Game code">Spielcode</span><input id="mp-code" maxlength="6" placeholder="z. B. K7QXM" style="text-transform:uppercase"></label>
+      <label><span data-en="Game code">Spielcode</span><input id="mp-code" maxlength="6" placeholder="Code (K7QXM) oder IP" style="text-transform:uppercase"></label>
       <label><span data-en="Side (versus only)">Seite (nur „Gegeneinander“)</span><select id="mp-side"></select></label>
       <label><span data-en="Class">Klasse</span><select id="mp-cls"></select></label>
       <button class="btn" id="mp-join" data-en="Join">Beitreten</button>
-      <div id="mp-lan" class="hidden"><h4 data-en="LAN games">Spiele im WLAN</h4><div id="mp-lanlist"></div></div>
       <p id="mp-status"></p>
     </div>
   </div>

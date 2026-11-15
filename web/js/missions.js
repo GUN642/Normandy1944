@@ -171,8 +171,40 @@ export class Missions {
   }
 
   // Spawnpunkt des menschlichen Spielers
+  // Wiedereinstieg weiter vorn: hinter dem Kameraden, der dem aktuellen Ziel am nächsten ist
+  // und nicht unmittelbar im Feindkontakt steht; sonst am zuletzt erreichten Ziel
+  forwardSpawn(side) {
+    const g = this.g, W = g.world;
+    const a = this.objAnchor(side);
+    if (!a) return null;
+    const enemies = g.units.list.filter((u) => u.alive && u.team !== side);
+    const friends = g.units.list.filter((u) => u.alive && u.team === side && !u.inBoat && !u.lost && !u.static && !u.chute);
+    for (const av of g.avatars.values()) if (av.alive && av.visible && av.team === side) friends.push(av);
+    let best = null, bd = 1e9;
+    for (const f of friends) {
+      if (W.waterDepth(f.pos.x, f.pos.z) > 0.6) continue;
+      let de = 1e9;
+      for (const e of enemies) { const d = Math.hypot(e.pos.x - f.pos.x, e.pos.z - f.pos.z); if (d < de) de = d; }
+      if (de < 35) continue;
+      const d = Math.hypot(f.pos.x - a.x, f.pos.z - a.z);
+      if (d < bd) { bd = d; best = f; }
+    }
+    const base = best ? best.pos : this.state[side].lastAnchor;
+    if (!base) return null;
+    // ein paar Meter hinter dem Kameraden (vom Ziel weg), auf freiem, trockenem Boden
+    const dx = base.x - a.x, dz = base.z - a.z, dl = Math.hypot(dx, dz) || 1;
+    for (let k = 0; k < 16; k++) {
+      const back = 3 + rand() * 4, side2 = (rand() - 0.5) * 6;
+      const x = base.x + dx / dl * back - dz / dl * side2, z = base.z + dz / dl * back + dx / dl * side2;
+      const c = W.navCell(x, z);
+      if (W.navFree(c[0], c[1]) && W.waterDepth(x, z) < 0.5) return new THREE.Vector3(x, W.groundAt(x, z), z);
+    }
+    return null;
+  }
+
   playerSpawn(side, first) {
     const g = this.g, W = g.world, sp = this.op[side].spawn;
+    if (!first) { const f = this.forwardSpawn(side); if (f) return { p: f, forward: true }; }
     if (sp === 'jump') {
       if (first) return { jump: true, p: W.anchors.jump.clone().setY(W.h(W.anchors.jump.x, W.anchors.jump.z) + 170) };
       const pts = ['pt1', 'pt2', 'pt3', 'pt4'].map((k) => W.anchors[k]);
@@ -297,7 +329,8 @@ export class Missions {
         let n = 0;
         for (const id of o.targets) {
           const tg = W.targets[id];
-          if (!tg || tg.destroyed) { n++; continue; }
+          if (!tg) { if (this.t > 900) n++; continue; }   // Ziel noch nicht da (Panzer einer späteren Welle)
+          if (tg.destroyed) { n++; continue; }
           if (tg.crew && tg.kind !== 'gun' && tg.kind !== 'flak' && tg.kind !== 'wire') {
             const crew = g.units.list.filter((u) => u.crewOf === id);
             if (crew.length && crew.every((u) => !u.alive)) { this.destroyTarget(tg, side); n++; continue; }
@@ -324,7 +357,12 @@ export class Missions {
         const en = this.countNear(OTHER[side], a, o.r), fr = this.countNear(side, a, o.r);
         if (en > fr + 1 && en >= 3) s.lose += dt; else s.lose = Math.max(0, s.lose - dt * 0.5);
         s.prog = s.lose;
-        if (s.lose > 25) { s.failed = true; this.finish(OTHER[side], T('Stellung verloren', 'Position lost')); return; }
+        if (s.lose > 25) {
+          s.failed = true;
+          // Spieler verliert seine Stellung: verloren. KI-Verteidiger: die Angreifer müssen ihre Ziele trotzdem erfüllen
+          if (this.hasHumans(side)) this.finish(OTHER[side], T('Stellung verloren', 'Position lost'));
+          return;
+        }
         done = s.timer <= 0;
         break;
       }
@@ -345,6 +383,7 @@ export class Missions {
         break;
     }
     if (done) {
+      { const nm = o.anchor || (o.targets && o.targets[0]); const pa = W.anchors[nm] || (W.targets[nm] && W.targets[nm].pos); if (pa && o.type !== 'defend') s.lastAnchor = pa.clone(); }
       s.i++; s.timer = 0; s.lose = 0; s.objT = 0; s.kills = 0; s.flagT = 0;
       if (side === g.player.team) { g.onObjective(o); }
       const nx = this.obj(side);

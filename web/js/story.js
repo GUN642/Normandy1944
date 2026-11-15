@@ -464,12 +464,177 @@ export const OPERATIONS = [
       { t: 3, from: { de: 'Kompanieführer', en: 'Company leader' }, side: 'de', text: { de: 'Aus den Deckungslöchern! Sie kommen durch den Nebel.', en: 'Out of the foxholes! They are coming through the fog.' } },
     ],
   },
+
+  // ------------------------------------------------------------------ Utah Beach
+  {
+    id: 'utah', map: 'utah', date: { de: '6. Juni 1944', en: '6 June 1944' }, time: '06:30', tod: 6.9, weather: 'clear_morning',
+    title: { de: 'Utah Beach', en: 'Utah Beach' },
+    place: { de: 'Utah Beach bei La Madeleine, Abschnitt Uncle Red', en: 'Utah Beach near La Madeleine, Uncle Red sector' },
+    history: {
+      de: 'Die Strömung trägt die ersten Landungsboote der 4. US-Infanteriedivision rund zwei Kilometer südlich am geplanten Abschnitt vorbei – an eine Stelle, die kaum verteidigt ist. Der stellvertretende Divisionskommandeur entscheidet: „Wir fangen den Krieg genau hier an!“ Mit knapp 200 Verlusten wird Utah zum erfolgreichsten Landeabschnitt des D-Day; über die Dämme durch das geflutete Hinterland stößt die Division zu den Fallschirmjägern vor.',
+      en: 'The current carries the first landing craft of the US 4th Infantry Division about two kilometres south of the planned sector – to a spot that is barely defended. The assistant division commander decides: "We\'ll start the war from right here!" With fewer than 200 casualties Utah becomes the most successful landing of D-Day; across the causeways through the flooded hinterland the division pushes on to the paratroopers.',
+    },
+    us: {
+      unit: { de: '8. Infanterieregiment, 4. Infanteriedivision', en: '8th Infantry Regiment, 4th Infantry Division' },
+      briefing: {
+        de: 'Ihr Boot landet bei Tageslicht vor den Dünen von La Madeleine. Erreichen Sie die Ufermauer, schalten Sie die beiden Bunker des Widerstandsnests 5 aus und stoßen Sie über den Damm durch das geflutete Marschland bis zum Ausgang bei Pouppeville vor, wo die 101. Luftlandedivision wartet.',
+        en: 'Your boat lands in daylight off the dunes of La Madeleine. Reach the seawall, knock out the two bunkers of strongpoint WN 5 and push across the causeway through the flooded marsh to the exit at Pouppeville, where the 101st Airborne is waiting.',
+      },
+      spawn: 'boats',
+      objectives: [
+        { type: 'reach', anchor: 'seawall', r: 40, text: { de: 'Ufermauer erreichen', en: 'Reach the seawall' } },
+        { type: 'destroy', targets: ['wn5a', 'wn5b'], text: { de: 'Bunker des Widerstandsnests 5 ausschalten', en: 'Knock out the WN 5 bunkers' } },
+        { type: 'reach', anchor: 'exit', r: 25, text: { de: 'Über den Damm zum Ausgang Pouppeville', en: 'Cross the causeway to the Pouppeville exit' } },
+      ],
+    },
+    de: {
+      unit: { de: 'Grenadier-Regiment 919, 709. Infanterie-Division', en: 'Grenadier Regiment 919, 709th Infantry Division' },
+      briefing: {
+        de: 'Nach dem Bombenangriff sind die Stellungen des Widerstandsnests 5 schwer beschädigt, die Hälfte der Geschütze ist ausgefallen. Halten Sie die Dünen so lange wie möglich – Verstärkung soll aus Sainte-Marie-du-Mont über den Damm kommen.',
+        en: 'After the bombing the positions of strongpoint WN 5 are badly damaged, half the guns are out of action. Hold the dunes as long as possible – reinforcements are to come across the causeway from Sainte-Marie-du-Mont.',
+      },
+      spawn: 'dunes',
+      objectives: [{ type: 'defend', anchor: 'dunes', r: 60, time: 360, text: { de: 'Dünen und Widerstandsnest 5 halten', en: 'Hold the dunes and strongpoint WN 5' } }],
+    },
+    forces: {
+      us: [
+        { anchor: 'boat', n: 20, order: 'attack', target: 'dunes', landing: true, roles: ['rifle', 'rifle', 'smg', 'mg', 'rifle', 'at', 'rifle', 'officer', 'rifle', 'smg', 'rifle', 'rifle', 'mg', 'rifle', 'smg', 'rifle', 'at', 'rifle', 'rifle', 'officer'] },
+        { anchor: 'boat', n: 12, order: 'attack', target: 'causeway', wave: 70, landing: true, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'rifle', 'rifle', 'at', 'rifle', 'smg', 'rifle', 'rifle', 'officer'] },
+        { anchor: 'boat', n: 10, order: 'attack', target: 'exit', wave: 220, landing: true, roles: ['rifle', 'smg', 'rifle', 'mg', 'rifle', 'rifle', 'smg', 'rifle', 'at', 'rifle'] },
+      ],
+      de: [
+        { anchor: 'wn5a', n: 2, order: 'static', roles: ['mg', 'rifle'], bunker: true },
+        { anchor: 'wn5b', n: 2, order: 'static', roles: ['mg', 'rifle'], bunker: true },
+        { anchor: 'dunes', n: 7, order: 'hold', roles: ['rifle', 'rifle', 'mg', 'smg', 'rifle', 'officer', 'rifle'] },
+        { anchor: 'village', n: 7, order: 'attack', target: 'causeway', wave: 240, roles: ['rifle', 'smg', 'rifle', 'mg', 'rifle', 'at', 'rifle'] },
+      ],
+    },
+    ambient: { naval: true, planes: 'p47', arty: 0.4, mortars: true, sniper: 0, surf: true },
+    events: [
+      { t: 2, from: { de: 'Bootsführer', en: 'Coxswain' }, side: 'us', text: { de: 'Wir sind zu weit südlich – egal, Klappe runter!', en: 'We\'re too far south – never mind, ramp down!' } },
+      { t: 12, from: { de: 'Brigadegeneral Roos*', en: 'Brig. Gen. Roos*' }, side: 'us', text: { de: 'Wir fangen den Krieg genau hier an! Alles über die Mauer!', en: 'We\'ll start the war from right here! Everybody over the wall!' } },
+      { t: 3, from: { de: 'Leutnant Jah*', en: 'Lt. Jah*' }, side: 'de', text: { de: 'Landungsboote und schwimmende Panzer! Alles an die Waffen!', en: 'Landing craft and swimming tanks! Man the guns!' } },
+      { t: 70, from: { de: 'Strandmeister', en: 'Beachmaster' }, side: 'us', text: { de: 'DD-Panzer sind an Land. Sie unterstützen den Vorstoß über den Damm.', en: 'DD tanks are ashore. They will support the push across the causeway.' } },
+    ],
+  },
+
+  // ------------------------------------------------------------------ Operation Cobra
+  {
+    id: 'cobra', map: 'cobra', date: { de: '25.–26. Juli 1944', en: '25–26 July 1944' }, time: '11:00', tod: 11, weather: 'clear_morning',
+    title: { de: 'Operation Cobra – Marigny', en: 'Operation Cobra – Marigny' },
+    place: { de: 'Straße Saint-Lô–Périers, vor Marigny', en: 'Saint-Lô–Périers road, outside Marigny' },
+    history: {
+      de: 'Am Morgen des 25. Juli werfen rund 1.500 schwere Bomber einen Bombenteppich auf einen schmalen Streifen südlich der Straße Saint-Lô–Périers. Die Panzer-Lehr-Division wird schwer getroffen – ihr Kommandeur meldet, seine Front sehe „wie eine Mondlandschaft“ aus. Auch eigene Truppen werden von zu kurz fallenden Bomben getroffen. Um 11 Uhr greift die Infanterie an; am 26. Juli stoßen Panzer durch, Marigny fällt – der Ausbruch aus der Normandie beginnt.',
+      en: 'On the morning of 25 July some 1,500 heavy bombers carpet-bomb a narrow strip south of the Saint-Lô–Périers road. The Panzer Lehr Division is hit hard – its commander reports his front looks "like the face of the moon". Bombs falling short also hit American troops. At 11:00 the infantry attacks; on 26 July armour breaks through and Marigny falls – the breakout from Normandy begins.',
+    },
+    us: {
+      unit: { de: '18. Infanterieregiment, 1. Infanteriedivision', en: '18th Infantry Regiment, 1st Infantry Division' },
+      briefing: {
+        de: 'Der Bombenteppich ist gefallen, die Erde raucht noch. Überqueren Sie die Straße Saint-Lô–Périers, schalten Sie MG-Stellung und Pak aus, vernichten Sie die Panzer IV im Hinterland und nehmen Sie die Kreuzung von Marigny.',
+        en: 'The carpet bombing is over, the ground is still smoking. Cross the Saint-Lô–Périers road, knock out the MG position and the AT gun, destroy the Panzer IVs in the rear and take the Marigny crossroads.',
+      },
+      spawn: 'start',
+      objectives: [
+        { type: 'reach', anchor: 'road', r: 30, text: { de: 'Straße Saint-Lô–Périers überqueren', en: 'Cross the Saint-Lô–Périers road' } },
+        { type: 'destroy', targets: ['mgroad', 'pak1'], text: { de: 'MG-Stellung und Pak ausschalten', en: 'Knock out the MG and the AT gun' } },
+        { type: 'destroy', targets: ['pz1', 'pz2'], text: { de: 'Panzer IV vernichten (Bazooka, Luftangriff)', en: 'Destroy the Panzer IVs (bazooka, air strike)' } },
+        { type: 'clear', anchor: 'marigny', r: 60, left: 1, text: { de: 'Kreuzung von Marigny nehmen', en: 'Take the Marigny crossroads' } },
+      ],
+    },
+    de: {
+      unit: { de: 'Panzergrenadier-Lehr-Regiment 902, Panzer-Lehr-Division', en: 'Panzergrenadier Lehr Regiment 902, Panzer Lehr Division' },
+      briefing: {
+        de: 'Der Bombenteppich hat die Hauptkampflinie zerschlagen. Sammeln Sie die Reste der Kompanie hinter den Hecken, halten Sie die Linie südlich der Straße und danach Marigny, bis Verstärkung eintrifft.',
+        en: 'The carpet bombing has shattered the main line of resistance. Gather what is left of the company behind the hedgerows, hold the line south of the road and then Marigny until reinforcements arrive.',
+      },
+      spawn: 'hedgeS',
+      objectives: [
+        { type: 'defend', anchor: 'hedgeS', r: 60, time: 300, text: { de: 'Heckenlinie südlich der Straße halten', en: 'Hold the hedgerow line south of the road' } },
+        { type: 'defend', anchor: 'marigny', r: 60, time: 240, text: { de: 'Marigny halten', en: 'Hold Marigny' } },
+      ],
+    },
+    forces: {
+      us: [
+        { anchor: 'start', n: 8, order: 'attack', target: 'road', roles: ['rifle', 'rifle', 'smg', 'mg', 'rifle', 'at', 'officer', 'rifle'] },
+        { anchor: 'start2', n: 8, order: 'attack', target: 'hedgeS', wave: 50, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'rifle', 'at', 'smg', 'rifle'] },
+        { anchor: 'start', n: 8, order: 'attack', target: 'marigny', wave: 220, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'rifle', 'rifle', 'at', 'rifle'] },
+      ],
+      de: [
+        { anchor: 'mgroad', n: 2, order: 'static', roles: ['mg', 'rifle'] },
+        { anchor: 'pak1', n: 3, order: 'static', roles: ['rifle', 'rifle', 'mg'] },
+        { anchor: 'hedgeS', n: 6, order: 'hold', tank: 'pz4', tankId: 'pz1', roles: ['rifle', 'mg', 'assault', 'rifle', 'at', 'rifle'] },
+        { anchor: 'marigny', n: 5, order: 'hold', roles: ['rifle', 'mg', 'rifle', 'officer', 'at'] },
+        { anchor: 'deRear', n: 7, order: 'attack', target: 'hedgeS', wave: 200, tank: 'pz4', tankId: 'pz2', roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle', 'at', 'rifle'] },
+      ],
+    },
+    ambient: { planes: 'p47', arty: 0.8, mortars: true, sniper: 1, carpet: true },
+    events: [
+      { t: 2, from: { de: 'Bataillon', en: 'Battalion' }, side: 'us', text: { de: 'Die Bomber sind durch. Vorwärts, bevor sich der Gegner erholt!', en: 'The bombers are through. Move out before the enemy recovers!' } },
+      { t: 2, from: { de: 'Kompanieführer', en: 'Company leader' }, side: 'de', text: { de: 'Wer noch lebt, an die Hecken! Die Amerikaner kommen.', en: 'Everyone still alive, to the hedgerows! The Americans are coming.' } },
+      { t: 60, from: { de: 'Fliegerleitoffizier', en: 'Air liaison' }, side: 'us', text: { de: 'Thunderbolts über Marigny – fordern Sie Luftunterstützung gegen die Panzer an.', en: 'Thunderbolts over Marigny – call air support on the tanks.' } },
+    ],
+  },
+
+  // ------------------------------------------------------------------ Kessel von Falaise
+  {
+    id: 'chambois', map: 'chambois', date: { de: '20. August 1944', en: '20 August 1944' }, time: '14:00', tod: 14, weather: 'clear_morning',
+    title: { de: 'Der Kessel von Falaise – Chambois', en: 'The Falaise Pocket – Chambois' },
+    place: { de: 'Chambois an der Dives', en: 'Chambois on the Dives' },
+    history: {
+      de: 'Mitte August sind die deutschen Armeen zwischen Falaise und Argentan eingeschlossen. Am 19. August treffen sich in Chambois amerikanische Soldaten der 90. Infanteriedivision und polnische Panzergrenadiere – der Kessel ist geschlossen. Tausende Deutsche versuchen über die Furten und Brücken der Dives auszubrechen; das Tal wird zum „Korridor des Todes“. Am 21. August endet die Schlacht um die Normandie.',
+      en: 'By mid-August the German armies are trapped between Falaise and Argentan. On 19 August American soldiers of the 90th Infantry Division and Polish armoured infantry meet at Chambois – the pocket is closed. Thousands of Germans try to break out across the fords and bridges of the Dives; the valley becomes the "corridor of death". On 21 August the Battle of Normandy ends.',
+    },
+    us: {
+      unit: { de: '359. Infanterieregiment, 90. Infanteriedivision', en: '359th Infantry Regiment, 90th Infantry Division' },
+      briefing: {
+        de: 'Chambois ist genommen, der Kessel geschlossen. Deutsche Kampfgruppen mit Panzern versuchen über die Dives-Brücke nach Osten durchzubrechen. Halten Sie den Ortskern, vernichten Sie die Panzer und lassen Sie niemanden durch.',
+        en: 'Chambois is taken, the pocket is closed. German battle groups with tanks are trying to break out east across the Dives bridge. Hold the town centre, destroy the tanks and let no one through.',
+      },
+      spawn: 'usStart',
+      objectives: [
+        { type: 'defend', anchor: 'square', r: 55, time: 420, text: { de: 'Ortskern von Chambois halten', en: 'Hold the centre of Chambois' } },
+        { type: 'destroy', targets: ['t1', 't2'], text: { de: 'Ausbrechende Panzer vernichten', en: 'Destroy the breakout tanks' } },
+      ],
+    },
+    de: {
+      unit: { de: 'Fallschirmjäger-Regiment 9, 3. Fallschirmjäger-Division', en: 'Fallschirmjäger Regiment 9, 3rd Parachute Division' },
+      briefing: {
+        de: 'Die Reste des Regiments sitzen im Kessel. Der einzige Weg nach Osten führt über die Dives bei Chambois. Stürmen Sie mit den letzten Panzern die Brücke und schlagen Sie sich zum Ostausgang durch.',
+        en: 'What is left of the regiment is trapped in the pocket. The only way east leads across the Dives at Chambois. Storm the bridge with the last tanks and fight your way to the eastern exit.',
+      },
+      spawn: 'westStart',
+      objectives: [
+        { type: 'reach', anchor: 'bridgeE', r: 20, text: { de: 'Über die Dives-Brücke vorstoßen', en: 'Push across the Dives bridge' } },
+        { type: 'reach', anchor: 'eastExit', r: 30, text: { de: 'Zum Ostausgang durchbrechen', en: 'Break through to the eastern exit' } },
+      ],
+    },
+    forces: {
+      us: [
+        { anchor: 'square', n: 8, order: 'hold', roles: ['rifle', 'rifle', 'mg', 'smg', 'rifle', 'at', 'officer', 'rifle'] },
+        { anchor: 'keep', n: 1, order: 'static', roles: ['sniper'], tower: true },
+        { anchor: 'bridgeE', n: 5, order: 'hold', roles: ['mg', 'rifle', 'at', 'rifle', 'smg'] },
+        { anchor: 'usStart', n: 6, order: 'attack', target: 'square', wave: 160, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'at', 'rifle'] },
+      ],
+      de: [
+        { anchor: 'westStart', n: 8, order: 'attack', target: 'bridge', wave: 20, tank: 'pz4', tankId: 't1', roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle', 'at', 'rifle', 'officer'] },
+        { anchor: 'westStart2', n: 8, order: 'attack', target: 'bridge', wave: 110, tank: 'stug', tankId: 't2', roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle', 'at', 'assault', 'rifle'] },
+        { anchor: 'ridge', n: 3, order: 'hold', roles: ['sniper', 'mg', 'rifle'] },
+        { anchor: 'westStart', n: 10, order: 'attack', target: 'square', wave: 250, roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle', 'at', 'assault', 'rifle', 'smg', 'rifle'] },
+      ],
+    },
+    ambient: { planes: 'p47', arty: 0.9, mortars: true, sniper: 0 },
+    events: [
+      { t: 3, from: { de: 'Hauptmann Laug*', en: 'Capt. Laug*' }, side: 'us', text: { de: 'Sie kommen über die Brücke, mit Panzern. Bazookas nach vorn!', en: 'They\'re coming over the bridge, with tanks. Bazookas forward!' } },
+      { t: 3, from: { de: 'Regimentsführer', en: 'Regimental commander' }, side: 'de', text: { de: 'Das ist die letzte Lücke. Durch Chambois oder in Gefangenschaft!', en: 'This is the last gap. Through Chambois or into captivity!' } },
+      { t: 90, from: { de: 'Verbindungsoffizier', en: 'Liaison officer' }, side: 'us', text: { de: 'Polnische Panzer auf Höhe 262 bei Mont-Ormel halten die Straße nach Vimoutiers.', en: 'Polish armour on Hill 262 at Mont-Ormel is holding the road to Vimoutiers.' } },
+    ],
+  },
 ];
 
 // Kampagnenreihenfolge je Seite (historisch, aus Sicht der jeweiligen Seite)
 export const CAMPAIGN = {
-  us: ['drop', 'stmere', 'omaha', 'pointe', 'brecourt', 'lafiere', 'carentan', 'stlo'],
-  de: ['drop', 'omaha', 'pointe', 'brecourt', 'stmere', 'lafiere', 'carentan', 'stlo'],
+  us: ['drop', 'stmere', 'utah', 'omaha', 'pointe', 'brecourt', 'lafiere', 'carentan', 'stlo', 'cobra', 'chambois'],
+  de: ['drop', 'utah', 'omaha', 'pointe', 'brecourt', 'stmere', 'lafiere', 'carentan', 'stlo', 'cobra', 'chambois'],
 };
 
 // Zwischentexte der Kampagne (nach erfolgreicher Mission)
@@ -483,6 +648,9 @@ export const EPILOGUE = {
     lafiere: { de: 'Am 9. Juni stürmt die 325. Gleitschirm-Infanterie über den Damm. Der Brückenkopf am Merderet ist gesichert.', en: 'On 9 June the 325th Glider Infantry storms across the causeway. The Merderet bridgehead is secure.' },
     carentan: { de: 'Mit Carentan sind die Brückenköpfe Utah und Omaha verbunden.', en: 'With Carentan taken, the Utah and Omaha beachheads are linked.' },
     stlo: { de: 'Am 18. Juli fällt Saint-Lô. Eine Woche später beginnt mit Operation Cobra der Ausbruch aus der Normandie.', en: 'Saint-Lô falls on 18 July. A week later Operation Cobra begins the breakout from Normandy.' },
+    utah: { de: 'Bis zum Abend sind 23.000 Mann an Land. Bei Pouppeville trifft die 4. Infanteriedivision auf die Fallschirmjäger der 101.', en: 'By evening 23,000 men are ashore. At Pouppeville the 4th Infantry Division links up with the 101st Airborne.' },
+    cobra: { de: 'Marigny fällt, die Front bricht auf. Binnen einer Woche stoßen amerikanische Panzer bis Avranches vor – der Weg in die Bretagne und nach Osten ist frei.', en: 'Marigny falls and the front gives way. Within a week American armour reaches Avranches – the way into Brittany and east is open.' },
+    chambois: { de: 'Der Kessel ist dicht. Rund 50.000 deutsche Soldaten gehen in Gefangenschaft, Tausende sind gefallen. Am 25. August wird Paris befreit.', en: 'The pocket is sealed. Around 50,000 German soldiers are taken prisoner, thousands have died. On 25 August Paris is liberated.' },
   },
   de: {
     drop: { de: 'Die Lage bleibt bis zum Morgen unklar. Überall im Hinterland wird gekämpft.', en: 'The situation stays unclear until morning. Fighting is going on all over the rear area.' },
@@ -493,6 +661,9 @@ export const EPILOGUE = {
     lafiere: { de: 'Der Damm ist mit ausgebrannten Panzern blockiert. Die Brücke bleibt in Feindeshand.', en: 'The causeway is blocked by burnt-out tanks. The bridge stays in enemy hands.' },
     carentan: { de: 'Das Regiment setzt sich nach Südwesten ab. Carentan fällt am 12. Juni.', en: 'The regiment withdraws to the south-west. Carentan falls on 12 June.' },
     stlo: { de: 'Nach Wochen im Heckenkrieg ist die Front ausgeblutet. Am 25. Juli bricht sie unter Operation Cobra zusammen.', en: 'After weeks of hedgerow fighting the front is bled white. On 25 July it collapses under Operation Cobra.' },
+    utah: { de: 'Das Widerstandsnest fällt nach wenigen Stunden. Utah Beach ist der Abschnitt mit den geringsten amerikanischen Verlusten.', en: 'The strongpoint falls within hours. Utah Beach is the sector with the lightest American losses.' },
+    cobra: { de: 'Die Panzer-Lehr-Division ist nach dem Bombenteppich nur noch ein Schatten. Die Front im Westen bricht zusammen.', en: 'After the carpet bombing the Panzer Lehr Division is only a shadow. The western front collapses.' },
+    chambois: { de: 'Ein Teil der Truppen entkommt durch den „Korridor des Todes“. Zurück bleiben zerstörte Kolonnen, Zehntausende geraten in Gefangenschaft.', en: 'Some troops escape through the "corridor of death". Left behind are destroyed columns; tens of thousands are captured.' },
   },
 };
 

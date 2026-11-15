@@ -30,7 +30,7 @@ export class World {
     this.anchors = {};
     this.ropes = [];
     this.walk = [];          // begehbare Flächen (Brücke, Bunkerdächer): { x0,x1,z0,z1,y }
-    this.water = !!(this.def.sea || this.def.flood || this.def.canal);
+    this.water = !!(this.def.sea || this.def.flood || this.def.canal || this.def.river);
     this.base = this.water || mapId === 'stlo' ? 0 : 8;
     this.flags = [];
     this.lights = [];
@@ -519,13 +519,43 @@ export class World {
           break;
         case 'bridge': {
           const parts = [];
-          const by = 1.35;
+          const by = f.y ?? 1.35;
           parts.push({ geo: new THREE.BoxGeometry(f.len, 0.5, f.w), color: 0x9a9284, matrix: M4(f.x, by - 0.25, f.z) });
           for (const sz of [-1, 1]) parts.push({ geo: new THREE.BoxGeometry(f.len, 0.9, 0.4), color: 0x8a8274, matrix: M4(f.x, by + 0.45, f.z + sz * (f.w / 2 - 0.2)) });
           parts.push({ geo: new THREE.BoxGeometry(2, 4, f.w - 1), color: 0x8a8274, matrix: M4(f.x, by - 2.4, f.z) });
           const m = new THREE.Mesh(mergeColored(parts), MAT.vc); m.castShadow = m.receiveShadow = true; this.group.add(m);
           this.walk.push({ x0: f.x - f.len / 2, x1: f.x + f.len / 2, z0: f.z - f.w / 2, z1: f.z + f.w / 2, y: by });
           for (const sz of [-1, 1]) this.addBox({ x: f.x, z: f.z + sz * (f.w / 2 - 0.2), hw: f.len / 2, hd: 0.25, rot: 0, y0: by - 0.5, y1: by + 0.9, kind: 'wall' });
+          break;
+        }
+        case 'seawall': {
+          // Ufermauer aus Beton mit Durchlässen (Utah Beach): hüfthoch, man kann darüber schießen
+          const parts = [];
+          for (let x = f.x0; x < f.x1; x += 6) {
+            const xm = x + 3;
+            if ((f.gaps || []).some(([a, b]) => xm > a && xm < b)) continue;
+            const wy = this.h(xm, f.z);
+            parts.push({ geo: new THREE.BoxGeometry(6.05, 1.5, 0.7), color: 0xa8a69c, matrix: M4(xm, wy + 0.35, f.z) });
+            parts.push({ geo: new THREE.BoxGeometry(6.05, 0.15, 0.9), color: 0xb8b6ac, matrix: M4(xm, wy + 1.12, f.z) });
+            this.addBox({ x: xm, z: f.z, hw: 3.02, hd: 0.4, rot: 0, y0: wy - 1, y1: wy + 1.15, kind: 'wall' });
+          }
+          const m = new THREE.Mesh(mergeColored(parts), MAT.vc); m.castShadow = m.receiveShadow = true; this.group.add(m);
+          break;
+        }
+        case 'keep': {
+          // Donjon von Chambois: mittelalterlicher Wohnturm (12. Jh.), rund 25 m hoch, mit Strebepfeilern
+          const parts = [], y0 = this.h(f.x, f.z);
+          const W2 = 14, D2 = 11, H2 = 24;
+          parts.push({ geo: new THREE.BoxGeometry(W2, H2, D2), color: 0xd8d0c0, matrix: M4(f.x, y0 + H2 / 2 - 0.5, f.z) });
+          for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push({ geo: new THREE.BoxGeometry(1.6, H2 + 1.5, 1.6), color: 0xccc4b4, matrix: M4(f.x + sx * W2 / 2, y0 + H2 / 2, f.z + sz * D2 / 2) });
+          for (let k = 0; k < 7; k++) for (const sz of [-1, 1]) parts.push({ geo: new THREE.BoxGeometry(1.0, 1.2, 0.8), color: 0xccc4b4, matrix: M4(f.x - W2 / 2 + 1 + k * (W2 - 2) / 6, y0 + H2 + 0.1, f.z + sz * D2 / 2) });   // Zinnen
+          const dk = [];
+          for (let k = 0; k < 3; k++) for (const sz of [-1, 1]) dk.push({ geo: new THREE.BoxGeometry(0.8, 2.0, 0.1), color: 0x111111, matrix: M4(f.x - 4 + k * 4, y0 + 8 + (k % 2) * 6, f.z + sz * (D2 / 2 + 0.05)) });
+          const m = new THREE.Mesh(mergeColored(parts.concat(dk)), MAT.vc); m.castShadow = m.receiveShadow = true; this.group.add(m);
+          this.addBox({ x: f.x, z: f.z, hw: W2 / 2 + 0.8, hd: D2 / 2 + 0.8, rot: 0, y0: y0 - 1, y1: y0 + H2 + 1, kind: 'house' });
+          this.towers = this.towers || [];
+          this.towers.push(new THREE.Vector3(f.x, y0 + H2 + 0.2, f.z - D2 / 2 + 1));
+          this.walk.push({ x0: f.x - W2 / 2, x1: f.x + W2 / 2, z0: f.z - D2 / 2, z1: f.z + D2 / 2, y: y0 + H2 });
           break;
         }
         case 'wreck': {

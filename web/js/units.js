@@ -12,7 +12,7 @@ const NAMES = {
   us: ['Miller', 'Jackson', 'Kowalski', 'Brennan', 'Russo', 'Taylor', 'Hughes', 'Ortiz', 'Walsh', 'Carter', 'Nolan', 'Fischer', 'Reed', 'Doyle', 'Parker', 'Lopez', 'Grant', 'Kelly', 'Murphy', 'Bauer', 'Wright', 'Hayes', 'Price', 'Sullivan'],
   de: ['Becker', 'Hofmann', 'Wagner', 'Krüger', 'Schulz', 'Lange', 'Vogel', 'Brandt', 'Keller', 'Huber', 'Seidel', 'Franke', 'Lorenz', 'Peters', 'Winter', 'Roth', 'Kraus', 'Engel', 'Böhm', 'Graf', 'Kuhn', 'Pohl', 'Arnold', 'Simon'],
 };
-const UNI = { drop: { us: 'us_para', de: 'de_heer' }, stmere: { us: 'us_para', de: 'de_heer' }, omaha: { us: 'us_inf', de: 'de_heer' }, pointe: { us: 'us_ranger', de: 'de_heer' }, brecourt: { us: 'us_para', de: 'de_heer' }, lafiere: { us: 'us_para', de: 'de_heer' }, carentan: { us: 'us_para', de: 'de_fj' }, stlo: { us: 'us_inf', de: 'de_fj' } };
+const UNI = { utah: { us: 'us_inf', de: 'de_heer' }, cobra: { us: 'us_inf', de: 'de_heer' }, chambois: { us: 'us_inf', de: 'de_fj' }, drop: { us: 'us_para', de: 'de_heer' }, stmere: { us: 'us_para', de: 'de_heer' }, omaha: { us: 'us_inf', de: 'de_heer' }, pointe: { us: 'us_ranger', de: 'de_heer' }, brecourt: { us: 'us_para', de: 'de_heer' }, lafiere: { us: 'us_para', de: 'de_heer' }, carentan: { us: 'us_para', de: 'de_fj' }, stlo: { us: 'us_inf', de: 'de_fj' } };
 export const uniformFor = (opId, team) => (UNI[opId] || UNI.omaha)[team];
 
 // Waffe je Rolle
@@ -63,7 +63,7 @@ export class Unit {
   chest(out) { return out.set(this.pos.x, this.pos.y + (this.stance === 2 ? 0.3 : this.stance === 1 ? 0.8 : 1.25), this.pos.z); }
   fwd(out) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
 
-  remove() { this.rig.dispose(); if (this.chute) this.sys.g.scene.remove(this.chute); }
+  remove() { this.rig.dispose(); if (this.chute) this.sys.g.scene.remove(this.chute); if (this.marker) this.sys.g.scene.remove(this.marker); }
 }
 
 // ------------------------------------------------------------------ Panzer
@@ -734,6 +734,7 @@ export class Units {
 
   animateDead(u, dt) {
     u.deadT += dt;
+    if (u.marker) u.marker.visible = false;
     if (u.deadT < 3) {
       u.rig.root.rotation.y = u.yaw;
       u.rig.pose(0, 0, 0, dt, Math.min(1, u.deadT * 2.2));
@@ -749,6 +750,37 @@ export class Units {
     r.root.visible = d < this.g.q.view * 0.9 && d > 0.9;
     r.setLod(d > 70 ? 1 : 0);
     if (r.root.visible) r.pose(u.speed, u.stance, u.pitch, dt, 0, u.firing);
+    this.mark(u, d);
+  }
+
+  // Markierung über dem Kopf: rot = Feind (nur wenn sichtbar oder gerade geschossen), blau = Kamerad
+  mark(u, d) {
+    const g = this.g;
+    const on = g.settings.markers !== false && u.alive && !u.inBoat;
+    let show = false;
+    if (on) {
+      if (u.team === g.player.team) show = d < 250 && !u.lost;
+      else {
+        if (!u.markT || g.time > u.markT) {
+          u.markT = g.time + 0.35 + Math.random() * 0.3;
+          const vr = Math.max(60, (g.atmo ? g.atmo.visibility : 250) * 1.6);
+          u.markVis = d < vr && g.world.los(g.camera.position, u.chest(_w)) && !g.smokeBlocks(g.camera.position, _w);
+        }
+        show = (u.markVis || (u.lastShot && g.time - u.lastShot < 3 && d < 250)) && d < 400;
+      }
+    }
+    if (!show) { if (u.marker) u.marker.visible = false; return; }
+    if (!u.marker) {
+      u.marker = new THREE.Sprite(markMat(u.team === g.player.team ? 'blue' : 'red'));
+      u.marker.center.set(0.5, 0);
+      g.scene.add(u.marker);
+    }
+    const want = u.team === g.player.team ? 'blue' : 'red';
+    if (u.marker.material !== markMat(want)) u.marker.material = markMat(want);
+    u.marker.visible = true;
+    u.marker.position.set(u.pos.x, u.pos.y + (u.stance === 2 ? 0.8 : u.stance === 1 ? 1.6 : 2.1), u.pos.z);
+    const k = Math.min(1, 0.6 + d / 200);
+    u.marker.scale.set(0.016 * k, 0.016 * k, 1);
   }
 
   // Für Clients: Puppen aus Schnappschuss
@@ -837,6 +869,18 @@ export const ROLES = ['rifle', 'smg', 'assault', 'mg', 'sniper', 'at', 'officer'
 export const WIDS = Object.keys(WEAPONS);
 
 // KI-MG-Schützen: Laufwechsel nach 75 Schuss (Spieler hat den vollen 250er-Gurt)
+const MARKS = {};
+export function markMat(kind) {
+  if (MARKS[kind]) return MARKS[kind];
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const x = c.getContext('2d');
+  const col = kind === 'red' ? '#ff3b2f' : '#3d8bff';
+  x.fillStyle = 'rgba(0,0,0,0.55)'; x.beginPath(); x.arc(16, 16, 11, 0, 7); x.fill();
+  x.fillStyle = col; x.beginPath(); x.arc(16, 16, 8, 0, 7); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.8)'; x.lineWidth = 1.5; x.stroke();
+  return (MARKS[kind] = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true, fog: false }));
+}
+
 export function magCap(W) { return W.id === 'mg42' ? 75 : W.mag; }
 
 export function lerpAngle(a, b, t) { return a + wrapAngle(b - a) * Math.min(1, t); }

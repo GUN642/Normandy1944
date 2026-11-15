@@ -251,12 +251,13 @@ class Game {
       p.startJump(sp.p, toEnemy);
       this.hud.toast(T('Fallschirm offen – mit WASD steuern', 'Chute open – steer with WASD'));
     } else if (sp.boat && (!this.net || this.net.isHost)) {
-      this.missions.landingWave(side, { anchor: 'boat', n: 10, target: 'shingle', roles: ['rifle', 'rifle', 'smg', 'mg', 'rifle', 'at', 'rifle', 'officer', 'rifle', 'smg'] }, this.aiScale(), true);
+      this.missions.landingWave(side, { anchor: 'boat', n: 10, target: (this.op[side].objectives.find((o) => o.anchor && this.world.anchors[o.anchor]) || {}).anchor || 'boat', roles: ['rifle', 'rifle', 'smg', 'mg', 'rifle', 'at', 'rifle', 'officer', 'rifle', 'smg'] }, this.aiScale(), true);
       p.yaw = Math.PI * 0 + 0; p.pitch = 0;
       p.yaw = 0;
     } else if (sp.boat) {
       p.spawnAt(new THREE.Vector3((rand() - 0.5) * 120, 0, -250), 0);
     } else p.spawnAt(sp.p, toEnemy);
+    if (sp.forward) { const a = this.missions.objAnchor(side); if (a) p.yaw = Math.atan2(-(a.x - p.pos.x), -(a.z - p.pos.z)); this.hud.toast(T('Wiedereinstieg bei den vordersten Kameraden', 'Respawned with the forward squad')); }
     if (sp.boat) p.yaw = 0;   // Bug zum Strand (Norden = Wasser; Strand liegt südlich)
     if (sp.boat) p.yaw = Math.PI;
   }
@@ -436,12 +437,17 @@ class Game {
   }
 
   // Fehler protokollieren (höchstens einmal pro Sekunde), Spiel läuft weiter
-  reportError(e) {
+  reportError(e, where = '') {
+    // Waffe hängt: Zustand zurücksetzen (Selbstheilung)
+    if (where === 'Waffe') { try { const p = this.player; p.reloading = 0; p.boltT = 0; p.nextFire = 0; if (!p.ammo[p.wid]) p.ammo[p.wid] = { mag: 0, res: 0 }; } catch (_) { /* egal */ } }
     const now = performance.now();
     if (this._errT && now - this._errT < 1000) return;
     this._errT = now;
-    console.error('Spielfehler', e);
-    this.lastError = String(e && e.stack || e).slice(0, 300);
+    console.error('Spielfehler', where, e);
+    this.lastError = (where ? where + ': ' : '') + String(e && e.stack || e).slice(0, 300);
+    // kurz sichtbar machen (für Fehlermeldungen per Screenshot)
+    const el = document.getElementById('errline');
+    if (el) { el.textContent = '⚠ ' + (where ? where + ': ' : '') + String(e && e.message || e).slice(0, 120) + (e && e.stack ? ' @ ' + (String(e.stack).split('\n')[1] || '').trim().replace(/^at /, '').slice(0, 90) : ''); el.classList.remove('hidden'); clearTimeout(this._errHide); this._errHide = setTimeout(() => el.classList.add('hidden'), 8000); }
   }
 
   // ------------------------------------------------------------ Hauptschleife
@@ -470,27 +476,28 @@ class Game {
     // Spieler
     const emptyInp = { look: { x: 0, y: 0 }, move: { x: 0, y: 0 }, held: () => false, pressed: () => false, released: () => false };
     const I = blockInput ? emptyInp : inp;
-    if (!blockInput) this.handleKeys(inp);
-    if (this.radioOpen && !blockInput) { /* Funkmenü verwendet Zifferntasten */ }
+    // Jedes Teilsystem einzeln abgesichert: ein Fehler darf nie den Rest des Spiels anhalten
+    const run = (name, fn) => { try { fn(); } catch (e) { this.reportError(e, name); } };
+    if (!blockInput) run('Tasten', () => this.handleKeys(inp));
     if (p.alive) {
-      if (I === inp) this.aimAssist(dt, inp);
-      p.update(dt, I);
-      if (!this.radioOpen) p.weaponUpdate(dt, I);
-      this.interactions(dt, I);
-    } else this.deadUpdate(dt);
+      if (I === inp) run('Zielhilfe', () => this.aimAssist(dt, inp));
+      run('Spieler', () => p.update(dt, I));
+      if (!this.radioOpen) run('Waffe', () => p.weaponUpdate(dt, I));
+      run('Interaktion', () => this.interactions(dt, I));
+    } else run('Wiedereinstieg', () => this.deadUpdate(dt));
     // Gefallen-Anzeige darf nie stehen bleiben, solange man lebt
     if (p.alive && !this.hud.el.respawn.classList.contains('hidden')) this.hud.respawn(false);
     const host = !this.net || this.net.isHost;
-    if (host) this.units.update(dt); else this.units.updatePuppets(dt);
-    this.combat.update(dt);
-    this.missions.update(dt);
-    this.atmo.update(dt);
-    if (this.net) this.net.update(dt);
-    this.comms.update();
-    this.world.update(dt, this.time);
+    run('KI', () => { if (host) this.units.update(dt); else this.units.updatePuppets(dt); });
+    run('Kampf', () => this.combat.update(dt));
+    run('Mission', () => this.missions.update(dt));
+    run('Atmosphäre', () => this.atmo.update(dt));
+    if (this.net) run('Netz', () => this.net.update(dt));
+    run('Funk', () => this.comms.update());
+    run('Welt', () => this.world.update(dt, this.time));
     if (this.radioCd) for (const k in this.radioCd) this.radioCd[k] = Math.max(0, this.radioCd[k] - dt);
-    if (this.radioOpen) this.hud.radioMenu(true, this.radioItems());
-    this.hud.update(dt);
+    if (this.radioOpen) run('Funkmenü', () => this.hud.radioMenu(true, this.radioItems()));
+    run('Anzeige', () => this.hud.update(dt));
     if (this.result && this.state === 'playing') { this.resultT -= dt; if (this.resultT <= 0) { this.showResult(); this.result = null; } }
   }
 
@@ -525,7 +532,7 @@ class Game {
       this.input.unlock();
       this.input.clearToggles();
       $('pause-mp').classList.toggle('hidden', !this.net);
-      if (this.net && this.net.tr.code) $('pause-code').textContent = this.net.isHost && this.net.tr.code() ? T('Spielcode: ', 'Game code: ') + this.net.tr.code() : '';
+      if (this.net) { const code = this.net.isHost && this.net.tr.code && this.net.tr.code(); const ip = this.net.isHost && this.net.tr.ip && this.net.tr.ip(); $('pause-code').textContent = [code ? T('Spielcode: ', 'Game code: ') + code : '', ip ? T('WLAN-IP: ', 'Wi-Fi IP: ') + ip : ''].filter(Boolean).join('  ·  '); }
       this.showMenu('pause');
     } else if (!on && this.state === 'paused') {
       this.state = 'playing';
@@ -537,21 +544,55 @@ class Game {
   // ------------------------------------------------------------ Interaktion, Funk, Tod
   interactions(dt, inp) {
     const p = this.player;
-    const act = p.inBoat || p.chute ? null : this.missions.interaction(p.pos, p.team);
+    const act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || this.ammoAction(p));
     this.interactHint = act;
     if (act && inp.held('use')) {
       this.holdE += dt;
       if (this.holdE >= act.time) {
         this.holdE = 0;
-        if (!this.net || this.net.isHost) this.missions.interact(act, p.team);
+        if (act.kind === 'ammo') this.takeAmmo(act);
+        else if (!this.net || this.net.isHost) this.missions.interact(act, p.team);
         else this.net.send({ t: 'int', k: act.kind, id: act.tg.id });
       }
     } else this.holdE = 0;
-    // Munitionskiste: bei Verbündeten mit Funker oder an der Startzone nachfüllen
-    if (inp.pressed('use') && !act) {
-      const near = this.units.list.find((u) => u.alive && u.team === p.team && u.role === 'officer' && u.pos.distanceTo(p.pos) < 3);
-      if (near) { for (const id of p.weapons) { const W = WEAPONS[id]; p.ammo[id].res = Math.max(p.ammo[id].res, W.grenade ? 2 : W.reserve); } p.bandages = Math.max(p.bandages, 2); this.hud.toast(T('Munition aufgefüllt', 'Ammo resupplied')); }
+  }
+
+  // Munition: lebender Kamerad (alle 90 s), Funker (füllt auf) oder Gefallener (einmal)
+  ammoAction(p) {
+    const needs = p.weapons.some((id) => { const W = WEAPONS[id], A = p.ammo[id]; return A && !W.smoke && (W.grenade ? A.res < 2 : A.res < W.reserve); });
+    if (!needs) return null;
+    let best = null, bd = 2.3;
+    for (const u of this.units.list) {
+      const d = Math.hypot(u.pos.x - p.pos.x, u.pos.z - p.pos.z);
+      if (d > bd || Math.abs(u.pos.y - p.pos.y) > 1.5 || u.inBoat) continue;
+      if (u.alive && (u.team !== p.team || u.lost || (u.ammoT && this.time < u.ammoT))) continue;
+      if (!u.alive && u.looted) continue;
+      bd = d; best = u;
     }
+    if (!best) return null;
+    const txt = !best.alive ? T('E halten: Munition aufsammeln', 'Hold E: pick up ammo') : best.role === 'officer' ? T('E halten: beim Funker nachfüllen', 'Hold E: resupply from radioman') : T('E halten: Munition vom Kameraden nehmen', 'Hold E: take ammo from comrade');
+    return { kind: 'ammo', u: best, text: txt, time: 0.7 };
+  }
+
+  takeAmmo(act) {
+    const p = this.player, u = act.u, full = u.alive && u.role === 'officer';
+    const got = [];
+    for (const id of p.weapons) {
+      const W = WEAPONS[id], A = p.ammo[id];
+      if (!A || W.smoke) continue;
+      const before = A.res;
+      if (W.grenade) A.res = Math.min(full ? 3 : 2, A.res + (u.alive && !full ? (u.nades > 0 ? 1 : 0) : 1));
+      else {
+        // gleiche Seite bzw. passende Patrone: ganze Magazine; sonst nur die Pistolenmunition
+        const mags = full ? 99 : W.pistol ? 1 : (!u.alive && u.team !== p.team ? 1 : 2);
+        A.res = Math.min(Math.round(W.reserve * (full ? 1 : 1.5)), A.res + W.mag * mags);
+      }
+      if (A.res > before) got.push(W.name);
+    }
+    if (u.alive) { u.ammoT = this.time + 90; if (u.nades > 0 && !full) u.nades--; } else u.looted = true;
+    if (full) p.bandages = Math.max(p.bandages, 2);
+    this.audio.play('mag', null, 0.5);
+    this.hud.toast(got.length ? T('Munition erhalten', 'Ammo received') : T('Nichts Passendes dabei', 'Nothing useful'));
   }
 
   radioItems() {
@@ -754,7 +795,8 @@ class Game {
     const tick = () => {
       if (!this.net || !this.net.isHost) return;
       const code = this.net.tr.code && this.net.tr.code(), st = this.net.tr.status && this.net.tr.status();
-      if (code && st === 'ready') { this.radio(T(`Spiel eröffnet. Spielcode: ${code}`, `Game hosted. Game code: ${code}`), T('Funk', 'Radio')); return; }
+      const ip = this.net.tr.ip && this.net.tr.ip();
+      if (code && st === 'ready') { this.radio(T(`Spiel eröffnet. Spielcode: ${code}`, `Game hosted. Game code: ${code}`) + (ip ? ` · WLAN-IP ${ip}` : ''), T('Funk', 'Radio')); return; }
       if (st && st.startsWith('err')) { this.radio(T('Spielcode nicht verfügbar (keine Internetverbindung). LAN-Spiel in der App funktioniert trotzdem.', 'Game code unavailable (no internet). LAN games in the app still work.'), T('Funk', 'Radio')); return; }
       if (n++ < 40) setTimeout(tick, 500);
     };
@@ -865,7 +907,9 @@ class Game {
       this.settings.name = $('mp-name').value.trim().slice(0, 16) || this.playerName(); saveSettings(this.settings);
       const code = $('mp-code').value.trim();
       if (!code) return;
-      this.joinGame(code.toUpperCase(), 0);
+      const ipm = /^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d+))?$/.exec(code);
+      if (ipm) this.joinGame(ipm[1], +(ipm[2] || 47790));
+      else this.joinGame(code.toUpperCase(), 0);
     });
     // Briefing
     on('br-start', () => {
@@ -929,18 +973,33 @@ class Game {
     sel('mp-density', [['0.6', T('Gering', 'Low')], ['1', T('Normal', 'Normal')], ['1.4', T('Hoch', 'High')]], '1');
     $('mp-status').textContent = '';
     // LAN-Spiele (nur App)
-    const tr = isApp ? netTransport() : null;
+    // WLAN-Spiele (nur App): eine dauerhafte Suche, bei jedem Öffnen neu gestartet
     $('mp-lan').classList.toggle('hidden', !isApp);
-    if (tr && tr.scan) {
-      tr.scan(true);
-      const upd = () => {
-        if ($('s-mp').classList.contains('hidden')) { tr.scan(false); return; }
-        const hs = tr.hosts();
-        $('mp-lanlist').innerHTML = hs.length ? hs.map((h) => `<button data-ip="${esc(h.ip)}" data-port="${h.port}">${esc(h.info.name)} – ${esc(L((opById(h.info.op) || {}).title || ''))} (${h.info.n})</button>`).join('') : `<i>${T('Suche Spiele im WLAN …', 'Searching LAN games …')}</i>`;
-        $('mp-lanlist').querySelectorAll('button').forEach((b) => b.onclick = () => { this.settings.name = $('mp-name').value.trim() || this.playerName(); this.joinGame(b.dataset.ip, +b.dataset.port); });
-        setTimeout(upd, 1000);
-      };
-      upd();
+    if (isApp) {
+      const tr = this.lanTr || (this.lanTr = netTransport());
+      if (tr && tr.scan) {
+        try { tr.scan(false); } catch (_) { /* egal */ }
+        setTimeout(() => { try { tr.scan(true); } catch (_) { /* egal */ } }, 250);
+        const myIp = tr.ip ? tr.ip() : '';
+        const t0 = performance.now();
+        clearTimeout(this._lanT);
+        const upd = () => {
+          if ($('s-mp').classList.contains('hidden')) { try { tr.scan(false); } catch (_) { /* egal */ } return; }
+          let hs = [];
+          try { hs = tr.hosts() || []; } catch (_) { hs = []; }
+          const html = hs.map((h) => `<button class="btn" data-ip="${esc(h.ip)}" data-port="${h.port}">▶ ${esc((h.info && h.info.name) || '?')} – ${esc(L((opById(h.info && h.info.op) || {}).title || ''))} (${(h.info && h.info.n) || 1} ${T('Spieler', 'players')})</button>`).join('');
+          if (html !== this._lanHtml) {
+            this._lanHtml = html;
+            $('mp-lanlist').innerHTML = html;
+            $('mp-lanlist').querySelectorAll('button').forEach((bt) => bt.onclick = () => { this.settings.name = $('mp-name').value.trim() || this.playerName(); saveSettings(this.settings); this.joinGame(bt.dataset.ip, +bt.dataset.port); });
+          }
+          const secs = Math.round((performance.now() - t0) / 1000);
+          $('mp-lanstat').textContent = (hs.length ? '' : T('Suche läuft … ', 'Searching … ') + (secs > 8 ? T('Noch nichts gefunden: Host muss das Spiel in der App eröffnen und im selben WLAN sein. Alternativ: Code oder IP des Hosts unten eingeben.', 'Nothing yet: the host must start the game in the app on the same Wi-Fi. Alternatively enter the host\'s code or IP below.') : '')) + (myIp ? '  ·  ' + T('Eigene IP: ', 'Own IP: ') + myIp : '');
+          this._lanT = setTimeout(upd, 1000);
+        };
+        this._lanHtml = null;
+        upd();
+      }
     }
   }
 
@@ -975,6 +1034,7 @@ class Game {
     if (M.sea || M.beach) { const z = (M.sea || -255) + 450; c.fillStyle = '#2e4450'; c.fillRect(0, 0, S, z * k); c.fillStyle = '#b4a27e'; c.fillRect(0, z * k, S, 30 * k); }
     if (M.flood) { c.fillStyle = '#3e4a3a'; c.fillRect((-330 + 450) * k, 0, 460 * k, S); }
     if (M.canal) { c.fillStyle = '#2e4450'; c.fillRect(0, 0, S, (M.canal + 450) * k); }
+    if (M.river) { c.strokeStyle = '#2e4450'; c.lineWidth = 5; c.beginPath(); for (let z = -450; z <= 450; z += 10) { const x = -60 + Math.sin(z / 90) * 12; (z === -450 ? c.moveTo : c.lineTo).call(c, (x + 450) * k, (z + 450) * k); } c.stroke(); }
     c.strokeStyle = '#a89c80'; c.lineCap = 'round';
     for (const r of M.roads || []) { c.lineWidth = Math.max(2, r.w * k); c.beginPath(); r.pts.forEach(([x, z], i) => (i ? c.lineTo : c.moveTo).call(c, (x + 450) * k, (z + 450) * k)); c.stroke(); }
     for (const t of M.towns || []) { c.fillStyle = 'rgba(110,102,88,0.7)'; c.beginPath(); c.arc((t.x + 450) * k, (t.z + 450) * k, t.r * k * 0.8, 0, 7); c.fill(); }
@@ -1007,6 +1067,7 @@ class Game {
       ['sel', 'shadows', T('Schatten', 'Shadows'), [['auto', T('Nach Stufe', 'By preset')], ['off', T('Aus', 'Off')], ['on', T('An', 'On')]]],
       ['sel', 'effects', T('Effekte (Rauch, Staub)', 'Effects (smoke, dust)'), [['auto', T('Nach Stufe', 'By preset')], ['low', T('Wenig', 'Low')], ['high', T('Viel', 'High')]]],
       ['range', 'fov', T('Sichtfeld', 'Field of view'), 55, 95, 1, (v) => v + '°'],
+      ['chk', 'markers', T('Markierungen (rot Feind, blau Kamerad)', 'Markers (red enemy, blue friend)')],
       ['chk', 'showFps', T('Bildrate anzeigen', 'Show frame rate')],
       ['h', T('Steuerung', 'Controls')],
       ['range', 'sensitivity', T('Empfindlichkeit', 'Sensitivity'), 0.3, 2.5, 0.05, (v) => v.toFixed(2)],

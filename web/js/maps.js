@@ -4,6 +4,18 @@ import { smoothstep, clamp } from './util.js';
 
 const g2 = (x, z, cx, cz, r) => Math.exp(-((x - cx) ** 2 + (z - cz) ** 2) / (r * r));
 
+// Bombentrichter-Feld (Pointe du Hoc, Bombenteppich bei Operation Cobra)
+function craters(x, z, cell, depth) {
+  const cx = Math.floor(x / cell), cz = Math.floor(z / cell);
+  const hx = Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453, fx = hx - Math.floor(hx);
+  const hz = Math.sin(cx * 39.3468 + cz * 11.135) * 24634.6345, fz = hz - Math.floor(hz);
+  const px = (cx + 0.2 + fx * 0.6) * cell, pz = (cz + 0.2 + fz * 0.6) * cell;
+  const d = Math.hypot(x - px, z - pz), r = (4 + fx * 5) * depth;
+  if (d < r) return -(1 - (d / r) ** 2) * r * 0.45;
+  if (d < r * 1.3) return Math.sin(((d - r) / (r * 0.3)) * Math.PI) * 0.6 * depth;
+  return 0;
+}
+
 export const MAPS = {
   // ---------------------------------------------------------------- Absprung bei Nacht
   bocage_night: {
@@ -227,6 +239,89 @@ export const MAPS = {
   },
 };
 
+// ---------------------------------------------------------------- Neue Tageslicht-Karten
+// Utah Beach: breiter Strand, Ufermauer, Dünen (WN 5), geflutetes Hinterland mit Damm (Ausgang 1)
+MAPS.utah = {
+  seed: 6306, amp: 0, hedge: 0.9, sea: -258, beach: true, flood: true,
+  height: (x, z, n) => {
+    let h;
+    if (z < -258) h = -1.6 - (-258 - z) * 0.03;
+    else if (z < -122) h = -1.3 + ((z + 258) / 136) * 2.9;                    // sehr breiter, flacher Strand
+    else if (z < -84) h = 1.6 + Math.max(0, Math.sin(((z + 122) / 38) * Math.PI)) * (3.2 + n.noise(x / 25, 1) * 1.2);   // Dünen
+    else if (z < 170) {                                                       // geflutetes Marschland
+      h = -0.7 + n.noise(x / 40, z / 40) * 0.25;
+      const cw = Math.exp(-(x * x) / (2 * 4.5 * 4.5));                       // Damm (Ausgang 1 nach Pouppeville)
+      h = h * (1 - cw) + cw * 1.3;
+      const t = smoothstep(-84, -66, z);                                      // Dünenrückseite fällt zum Marschland ab
+      h = 1.6 * (1 - t) + h * t;
+    } else h = 1.5 + smoothstep(170, 230, z) * 4 + n.fbm(x / 200, z / 200, 3) * 3;
+    return h;
+  },
+  roads: [{ w: 6, pts: [[0, -95], [0, 0], [0, 170], [10, 300], [0, 450]] }, { w: 5, pts: [[-450, 240], [0, 240], [450, 260]] }],
+  towns: [{ x: 10, z: 340, r: 70, n: 12, church: { x: 40, z: 360, ry: Math.PI / 2 } }],
+  farms: [{ x: -260, z: 300, ry: 0.3 }, { x: 280, z: 330, ry: 1.0 }],
+  ruinsAlong: { z: -130, x0: 150, x1: 380, n: 3 },
+  features: [
+    { type: 'seawall', z: -119, x0: -440, x1: 440, gaps: [[-8, 8], [-170, -150], [160, 180]] },
+    { type: 'bunker', id: 'wn5a', x: -55, z: -96, ry: 0.1, crew: true },
+    { type: 'bunker', id: 'wn5b', x: 70, z: -98, ry: -Math.PI / 2 + 0.5, crew: true, size: 1.1 },
+    { type: 'sandbags', x: 18, z: -100, r: 2.4 }, { type: 'sandbags', x: -120, z: -98, r: 2.4 },
+    { type: 'obstacles', z0: -240, z1: -140, x0: -420, x1: 420, n: 90 },
+    { type: 'wireline', z: -112, x0: -440, x1: 440, skip: [-12, 12] },
+    { type: 'trenchline', pts: [[-140, -90], [-60, -88], [0, -86], [70, -90], [140, -88]] },
+  ],
+  clear: [[0, 340, 60]],
+  noHedge: (x, z) => z < 175,
+  anchors: { boat: [0, -300], seawall: [0, -125], dunes: [0, -92], wn5a: [-55, -96], wn5b: [70, -98], causeway: [0, 60], exit: [0, 185], village: [10, 330], marsh: [-120, 40] },
+};
+
+// Operation Cobra: Bocage voller Bombentrichter, Straße Saint-Lô–Périers, Marigny
+MAPS.cobra = {
+  seed: 2507, amp: 0, hedge: 1,
+  height: (x, z, n) => 6 + n.fbm(x / 240, z / 240, 3) * 5 + (z < 120 ? craters(x, z, 26, 0.9) : 0),
+  roads: [
+    { w: 7, pts: [[-450, -60], [-200, -64], [0, -60], [200, -55], [450, -58]], name: 'St-Lô–Périers' },
+    { w: 6, pts: [[20, -450], [10, -200], [0, -60], [10, 150], [0, 320], [-10, 450]] },
+    { w: 5, pts: [[-450, 300], [0, 320], [450, 300]] },
+  ],
+  towns: [{ x: 0, z: 330, r: 75, n: 16, church: { x: 30, z: 345, ry: Math.PI / 2 } }],
+  farms: [{ x: -250, z: -250, ry: 0.4 }, { x: 260, z: 120, ry: 1.1 }, { x: -230, z: 160, ry: -0.3 }],
+  ruins: [{ x: 120, z: -40, r: 30, n: 4 }],
+  features: [
+    { type: 'sandbags', x: -40, z: -50, r: 2.4 }, { type: 'sandbags', x: 60, z: -48, r: 2.4 },
+    { type: 'mg', id: 'mgroad', x: -40, z: -50 },
+    { type: 'gun', id: 'pak1', kind: 'pak', x: 15, z: 20, ry: Math.PI, crew: true },
+  ],
+  clear: [[0, 330, 60]],
+  anchors: { start: [0, -380], start2: [-160, -360], road: [0, -60], mgroad: [-40, -50], pak1: [15, 20], hedgeS: [0, 120], marigny: [0, 320], deRear: [0, 430] },
+};
+
+// Kessel von Falaise: Chambois an der Dives mit dem Donjon
+MAPS.chambois = {
+  seed: 2008, amp: 0, hedge: 0.9, river: true,
+  height: (x, z, n) => {
+    let h = 2.2 + n.fbm(x / 220, z / 220, 3) * 3 + smoothstep(150, 420, Math.abs(x - 60)) * 10;
+    const ch = Math.exp(-((x + 60 - Math.sin(z / 90) * 12) ** 2) / (2 * 6 * 6));     // die Dives (gewunden)
+    h -= ch * 3.6;
+    return h;
+  },
+  roads: [
+    { w: 6, pts: [[-450, 10], [-200, 0], [-60, 0], [60, 10], [200, 30], [450, 60]] },
+    { w: 5, pts: [[60, 10], [70, -200], [60, -450]] },
+    { w: 5, pts: [[60, 10], [40, 200], [30, 450]] },
+  ],
+  towns: [{ x: 70, z: 20, r: 85, n: 22, square: { x: 70, z: 25, w: 46, d: 40 }, church: { x: 100, z: -30, ry: Math.PI / 2 } }],
+  farms: [{ x: -300, z: -200, ry: 0.3 }, { x: -280, z: 250, ry: 1.0 }, { x: 320, z: 280, ry: 0.5 }],
+  features: [
+    { type: 'bridge', x: -60, z: 0, len: 26, w: 7, y: 2.0 },
+    { type: 'keep', x: 30, z: -40 },
+    { type: 'sandbags', x: -30, z: 6, r: 2.4 }, { type: 'sandbags', x: -28, z: -12, r: 2.4 },
+  ],
+  clear: [[70, 20, 80]],
+  noHedge: (x, z) => Math.abs(x + 60 - Math.sin(z / 90) * 12) < 10,
+  anchors: { square: [70, 25], bridge: [-60, 0], bridgeE: [-35, 0], keep: [30, -40], westStart: [-380, 0], westStart2: [-360, -160], eastExit: [330, 50], usStart: [260, 40], ridge: [-200, -40] },
+};
+
 // Kartennamen für das freie Spiel
 export const MAP_NAMES = {
   bocage_night: { de: 'Bocage bei Sainte-Marie-du-Mont', en: 'Bocage near Sainte-Marie-du-Mont' },
@@ -237,6 +332,9 @@ export const MAP_NAMES = {
   lafiere: { de: 'La Fière', en: 'La Fière' },
   carentan: { de: 'Carentan', en: 'Carentan' },
   stlo: { de: 'Höhe 192 / Saint-Lô', en: 'Hill 192 / Saint-Lô' },
+  utah: { de: 'Utah Beach', en: 'Utah Beach' },
+  cobra: { de: 'Marigny (Operation Cobra)', en: 'Marigny (Operation Cobra)' },
+  chambois: { de: 'Chambois (Kessel von Falaise)', en: 'Chambois (Falaise Pocket)' },
 };
 
 export const clampMap = (v) => clamp(v, -445, 445);
