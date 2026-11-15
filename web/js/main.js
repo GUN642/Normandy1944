@@ -478,6 +478,8 @@ class Game {
       if (!this.radioOpen) p.weaponUpdate(dt, I);
       this.interactions(dt, I);
     } else this.deadUpdate(dt);
+    // Gefallen-Anzeige darf nie stehen bleiben, solange man lebt
+    if (p.alive && !this.hud.el.respawn.classList.contains('hidden')) this.hud.respawn(false);
     const host = !this.net || this.net.isHost;
     if (host) this.units.update(dt); else this.units.updatePuppets(dt);
     this.combat.update(dt);
@@ -493,11 +495,12 @@ class Game {
   }
 
   handleKeys(inp) {
+    this.input.radioMode = !!this.radioOpen;
     if (inp.pressed('pause')) this.pause(true);
     if (inp.pressed('chat') && this.net) { this.comms.openChat(); }
     if (inp.pressed('radio')) { this.radioOpen = !this.radioOpen; this.hud.radioMenu(this.radioOpen, this.radioItems()); }
     if (this.radioOpen) for (let i = 1; i <= 4; i++) if (inp.pressed('w' + i) || this.input.down.has('Digit' + i)) { if (!this._rk || this._rk !== i) this.callSupport(i - 1); this._rk = i; }
-    if (!this.input.down.has('Digit1') && !this.input.down.has('Digit2') && !this.input.down.has('Digit3') && !this.input.down.has('Digit4')) this._rk = 0;
+    if (![1, 2, 3, 4].some((i) => this.input.down.has('Digit' + i) || inp.held('w' + i))) this._rk = 0;
     this.hud.scoreboard(inp.held('score') || !!this.sbOpen);
     if (inp.pressed('map')) { this.mapOpen = !this.mapOpen; }
     this.hud.drawMap(this.mapOpen);
@@ -612,6 +615,7 @@ class Game {
   }
 
   takeOver(u) {
+    this.hud.respawn(false);
     const p = this.player;
     const role = u.role === 'officer' ? 'officer' : PLAYER_CLASSES.includes(u.role) ? u.role : 'rifle';
     const pos = u.pos.clone(), yaw = u.yaw;
@@ -625,6 +629,7 @@ class Game {
   }
 
   respawn() {
+    this.hud.respawn(false);
     const p = this.player;
     p.reset(this.nextCls || p.cls, p.team);
     this.spawnPlayer(false);
@@ -1073,13 +1078,17 @@ class Game {
     const btns = [...document.querySelectorAll('.screen:not(.hidden) button:not([disabled]), .screen:not(.hidden) select')].filter((b) => b.offsetParent);
     if (!btns.length) return;
     const now = performance.now();
-    if (this._gpT && now - this._gpT < 180) return;
+    // Richtung: erster Schritt sofort, Wiederholung erst nach 0,45 s, dann alle 0,18 s
+    const dir = m.down || m.right ? 1 : m.up || m.left ? -1 : 0;
     let moved = false;
-    if (m.down || m.right) { this.menuFocus = (this.menuFocus + 1) % btns.length; moved = true; }
-    else if (m.up || m.left) { this.menuFocus = (this.menuFocus - 1 + btns.length) % btns.length; moved = true; }
+    if (dir !== this._gpDir) { this._gpDir = dir; if (dir) { this.menuFocus = (this.menuFocus + dir + btns.length) % btns.length; moved = true; this._gpRep = now + 450; } }
+    else if (dir && now > this._gpRep) { this.menuFocus = (this.menuFocus + dir + btns.length) % btns.length; moved = true; this._gpRep = now + 180; }
+    if (!moved && this._gpT && now - this._gpT < 180) return;
+    if (moved) { /* Fokus unten setzen */ }
     else if (m.ok && !this._gpOk) { btns[this.menuFocus % btns.length].click(); this._gpT = now + 150; }
     else if (m.start && this.state === 'paused' && !this._gpOk) this.pause(false);
-    this._gpOk = m.ok || m.start;
+    else if (m.back && !this._gpOk) { const bk = [...document.querySelectorAll('.screen:not(.hidden) .back')].find((b) => b.offsetParent); if (bk) { bk.click(); this._gpT = now + 150; } }
+    this._gpOk = m.ok || m.start || m.back;
     if (moved) { this._gpT = now; btns.forEach((b) => b.classList.remove('gpf')); const b = btns[this.menuFocus % btns.length]; b.classList.add('gpf'); b.focus(); }
   }
 }

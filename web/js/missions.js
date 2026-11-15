@@ -269,7 +269,9 @@ export class Missions {
     if (this.op[side].spawn === 'jump') def.anchor = ['pt1', 'pt2', 'pt3', 'pt4'][(rand() * 4) | 0];
     if (!W.anchors[def.target]) def.target = first.target || first.anchor;
     if (side === g.player.team) g.radio(T('Verstärkung ist eingetroffen.', 'Reinforcements have arrived.'), T('Gefechtsstand', 'Command post'));
-    return g.units.spawnSquad(def, side, scale);
+    const sq = g.units.spawnSquad(def, side, scale);
+    if (sq) sq.reinf = true;
+    return sq;
   }
 
   evalSide(side, dt) {
@@ -301,7 +303,8 @@ export class Missions {
             if (crew.length && crew.every((u) => !u.alive)) { this.destroyTarget(tg, side); n++; continue; }
           }
           // KI-Seite: Sprengladung automatisch, wenn eigene Soldaten am Ziel sind
-          if (!human && !tg.charging && tg.kind !== 'tank' && this.countNear(side, tg.pos, 6) > 0) this.placeCharge(tg, side, null);
+          // KI-Seite sprengt selbst; mit Spielern helfen KI-Pioniere, wenn es 2,5 Minuten nicht vorangeht
+          if ((!human || s.objT > 150) && !tg.charging && tg.kind !== 'tank' && this.countNear(side, tg.pos, tg.kind === 'wire' ? 9 : 6) > 0) this.placeCharge(tg, side, null);
         }
         s.prog = n / o.targets.length;
         done = n === o.targets.length;
@@ -422,7 +425,11 @@ export class Missions {
     if (tg.destroyed) return;
     tg.destroyed = true;
     tg.charging = false;
-    if (tg.kind === 'wire') { if (tg.mesh) g.world.group.remove(tg.mesh); if (tg.box) tg.box.cut = true; tg.box.soft = true; }
+    if (tg.kind === 'wire') {
+      if (tg.mesh) g.world.group.remove(tg.mesh); if (tg.box) { tg.box.cut = true; tg.box.soft = true; }
+      g.world.buildNav();   // Gasse im Draht: Wege neu berechnen
+      for (const sq of g.units.squads) if (sq.order === 'attack' && sq.target) g.units.requestPath(sq, sq.target);
+    }
     else if (tg.mesh && (tg.kind === 'gun' || tg.kind === 'flak')) {
       tg.mesh.traverse((o) => { if (o.isMesh) o.material = MAT.burnt; });
       tg.mesh.rotation.z = 0.25;

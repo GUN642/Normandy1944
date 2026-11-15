@@ -70,6 +70,8 @@ export class Input {
     });
     window.addEventListener('keyup', (e) => { this.down.delete(e.code); });
     window.addEventListener('blur', () => this.releaseAll());
+    window.addEventListener('gamepadconnected', () => { this.device = 'gamepad'; });
+    window.addEventListener('gamepaddisconnected', (e) => { if (e && e.gamepad && this.gpCal) delete this.gpCal[e.gamepad.index]; });
     // Touchgerät: Bedienfläche von Anfang an zeigen; Maus-Ersatzereignisse nach Berührungen ignorieren
     this.lastTouch = 0;
     const touchOn = () => { this.lastTouch = performance.now(); this.device = 'touch'; document.body.classList.add('touchmode'); };
@@ -153,22 +155,88 @@ export class Input {
     this.assist = this.device !== 'keyboard';
   }
 
+  // Gamepad – wie im Medevac-sim: Kalibrierung ruhender Achsen (Switch Pro/Joy-Con an Android melden
+  // unbenutzte Achsen und Schultertasten dauerhaft bei −1/+1), rechter Stick auf 2/3 oder 2/5 bzw. 3/5,
+  // Steuerkreuz auch als Achse/POV-Hut, alle verbundenen Controller (Joy-Cons sind zwei Geräte).
+  // Tastenlage (Standard): 0 unten (Switch B) · 1 rechts (A) · 2 links (Y) · 3 oben (X) · 4 L · 5 R · 6 ZL · 7 ZR
+  // 8 − · 9 + · 10 linker Stick · 11 rechter Stick · 12–15 Steuerkreuz
   pollGamepad(dt) {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    let p = null;
-    for (const x of pads) if (x && x.connected) { p = x; break; }
     this.gpAct.clear();
-    if (!p) { this.gp = null; return; }
-    const ax = p.axes, b = (i) => !!(p.buttons[i] && (p.buttons[i].pressed || p.buttons[i].value > 0.4));
-    const any = ax.some((v) => Math.abs(v) > 0.3) || p.buttons.some((x) => x.pressed);
-    if (any) this.device = 'gamepad';
-    const sens = 2.6 * (this.settings.sensitivity || 1);
-    const rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
-    this.gp = { mx: dz(ax[0] || 0), my: -dz(ax[1] || 0), lx: Math.sign(rx) * rx * rx * sens, ly: Math.sign(ry) * ry * ry * sens * 0.75 };
-    const map = { 0: 'jump', 1: 'crouch', 2: 'reload', 3: 'wnext', 4: 'grenade', 5: 'use', 6: 'aim', 7: 'fire', 8: 'score', 9: 'pause', 10: 'sprint', 11: 'prone', 12: 'radio', 13: 'heal', 14: 'ptt', 15: 'map' };
-    for (const i in map) if (b(+i)) this.gpAct.add(map[i]);
-    // Menüsteuerung
-    this.gpMenu = { up: b(12) || (ax[1] || 0) < -0.6, down: b(13) || (ax[1] || 0) > 0.6, left: b(14) || (ax[0] || 0) < -0.6, right: b(15) || (ax[0] || 0) > 0.6, ok: b(0), back: b(1), start: b(9) };
+    let mx = 0, my = 0, lx = 0, ly = 0, found = false;
+    const menu = { up: false, down: false, left: false, right: false, ok: false, back: false, start: false };
+    this.gpCal = this.gpCal || {};
+    this.gpPrevB = this.gpPrevB || {};
+    for (const gp of pads) {
+      if (!gp || !gp.connected) continue;
+      found = true;
+      const ax = gp.axes;
+      const btn = (i) => (gp.buttons[i] ? gp.buttons[i].value || (gp.buttons[i].pressed ? 1 : 0) : 0);
+      const on = (i) => btn(i) > 0.4;
+      const prev = this.gpPrevB[gp.index] || [];
+      const cal = this.gpCal[gp.index] || (this.gpCal[gp.index] = { rest: ax.map(() => 0), nchg: ax.map(() => 0), center: ax.map(() => false), last: ax.slice(), still: ax.map(() => 0), moved: ax.map(() => 0) });
+      for (let i = 0; i < ax.length; i++) {
+        const v = ax[i] || 0;
+        if (v === cal.last[i]) cal.still[i] += dt; else { cal.still[i] = 0; cal.last[i] = v; cal.nchg[i]++; }
+        if (cal.nchg[i] > 3 && Math.abs(v) < 0.15) { cal.center[i] = true; cal.rest[i] = 0; }
+        if (i >= 2 && !cal.center[i] && cal.nchg[i] <= 3 && cal.still[i] > 0.4 && Math.abs(v) > 0.5) cal.rest[i] = v;
+        cal.moved[i] = Math.max(cal.moved[i], Math.abs(v - cal.rest[i]));
+      }
+      const A = (i) => { if (i >= ax.length) return 0; const r = cal.rest[i]; return Math.abs(r) > 0.3 ? 0 : dz((ax[i] || 0) - r); };
+      let ri = 2, rj = 3;
+      if (gp.mapping !== 'standard' && ax.length >= 6 && (Math.abs(cal.rest[3]) > 0.3 || (cal.moved[5] > 0.35 && cal.moved[3] < 0.2))) rj = 5;
+      if (gp.mapping !== 'standard' && ax.length >= 6 && Math.abs(cal.rest[2]) > 0.3 && Math.abs(cal.rest[3]) < 0.3) { ri = 3; rj = 5; }
+      const sx = A(0), sy = A(1), rx = A(ri), ry = A(rj);
+      const any = Math.abs(sx) + Math.abs(sy) + Math.abs(rx) + Math.abs(ry) > 0.2 || gp.buttons.some((x) => x.pressed);
+      if (any) this.device = 'gamepad';
+      mx += sx; my += -sy;
+      const sens = 2.6 * (this.settings.sensitivity || 1);
+      lx += Math.sign(rx) * rx * rx * sens; ly += Math.sign(ry) * ry * ry * sens * 0.75;
+      // Steuerkreuz: Tasten oder Achse (6/7) oder POV-Hut (9)
+      let hx = (on(15) ? 1 : 0) - (on(14) ? 1 : 0), hy = (on(13) ? 1 : 0) - (on(12) ? 1 : 0);
+      if (!hx && !hy && gp.mapping !== 'standard') {
+        if (ax.length >= 8) { if (Math.abs(ax[7] || 0) > 0.5) hy = Math.sign(ax[7]); if (Math.abs(ax[6] || 0) > 0.5) hx = Math.sign(ax[6]); }
+        if (ax.length > 9 && Math.abs(ax[9] || 0) <= 1) {
+          const hv = ax[9];
+          if (Math.abs(hv + 1) < 0.1) hy = -1; else if (Math.abs(hv - 0.143) < 0.1) hy = 1;
+          else if (Math.abs(hv - 0.714) < 0.1) hx = -1; else if (Math.abs(hv + 0.429) < 0.1) hx = 1;
+        }
+      }
+      const G = this.gpAct;
+      if (this.radioMode) {
+        // Funkmenü offen: Gesichtstasten wählen den Eintrag 1–4
+        if (on(0)) G.add('w1'); if (on(1)) G.add('w2'); if (on(2)) G.add('w3'); if (on(3)) G.add('w4');
+        if (hy < 0) G.add('radio');
+      } else {
+        if (on(0)) G.add('jump');
+        if (on(1)) G.add('crouch');
+        if (on(2)) G.add('reload');
+        if (on(3)) G.add('wnext');
+        if (on(4)) G.add('grenade');
+        if (on(5)) G.add('use');
+        if (btn(6) > 0.4) G.add('aim');
+        if (btn(7) > 0.4) G.add('fire');
+        if (on(11)) G.add('prone');
+        if (hy < 0) G.add('radio');
+        if (hy > 0) G.add('heal');
+        if (hx < 0) G.add('ptt');
+        if (hx > 0) G.add('map');
+      }
+      if (on(8)) G.add('score');
+      if (on(9)) G.add('pause');
+      // linken Stick drücken: Sprint umschalten (endet, wenn der Stick losgelassen wird)
+      if (on(10) && !prev[10]) this.padSprint = !this.padSprint;
+      if (Math.hypot(sx, sy) < 0.2) this.padSprint = false;
+      if (this.padSprint) G.add('sprint');
+      // Menüsteuerung: Stick, Steuerkreuz; bestätigen mit A oder B (beide unteren/rechten Tasten wie im Medevac-sim)
+      menu.up = menu.up || hy < 0 || sy < -0.6; menu.down = menu.down || hy > 0 || sy > 0.6;
+      menu.left = menu.left || hx < 0 || sx < -0.6; menu.right = menu.right || hx > 0 || sx > 0.6;
+      menu.ok = menu.ok || on(0) || on(1); menu.back = menu.back || on(8); menu.start = menu.start || on(9);
+      this.gpPrevB[gp.index] = gp.buttons.map((x) => x.pressed);
+    }
+    if (!found) { this.gp = null; this.gpMenu = null; return; }
+    this.gp = { mx, my, lx, ly };
+    this.gpMenu = menu;
   }
 
   // ------------------------------------------------------------ Touch

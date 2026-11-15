@@ -31,7 +31,7 @@ export class Unit {
     this.role = role;
     this.wid = opts.wid || roleWeapon(role, team);
     this.W = WEAPONS[this.wid];
-    this.mag = this.W.mag;
+    this.mag = magCap(this.W);
     this.nades = role === 'at' ? 0 : 1 + (rand() < 0.5 ? 1 : 0);
     this.pos = pos.clone();
     this.yaw = opts.yaw ?? 0;
@@ -348,7 +348,33 @@ export class Units {
     if (sq.order === 'attack' && sq.target) {
       // am Ziel angekommen -> halten
       const lead = alive[0];
-      if (lead.pos.distanceTo(sq.target) < 14) { sq.order = 'hold'; sq.home = sq.target.clone(); this.makeSpots(sq, sq.home); }
+      if (lead.pos.distanceTo(sq.target) < 14) { sq.order = 'hold'; sq.home = sq.target.clone(); sq.repaths = 0; this.makeSpots(sq, sq.home); }
+      else {
+        // Weg zu Ende, aber noch nicht am Ziel (Teilweg durch die Hecken): neu planen
+        sq.chk = (sq.chk || 0) - dt;
+        if (sq.chk <= 0) {
+          sq.chk = 4;
+          const ended = alive.filter((u) => !u.path || u.pathI >= u.path.length).length;
+          if (ended >= alive.length * 0.5) {
+            sq.repaths = (sq.repaths || 0) + 1;
+            if (sq.repaths > 3) {
+              // Ziel unerreichbar: auf das aktuelle Ziel der Seite umschwenken bzw. dort halten
+              const o = this.g.missions.objAnchor(sq.team);
+              if (o && o.distanceTo(sq.target) > 5) { sq.target = o.clone(); sq.repaths = 0; }
+              else { sq.order = 'hold'; sq.home = lead.pos.clone(); this.makeSpots(sq, sq.home); return; }
+            }
+            this.requestPath(sq, sq.target);
+          }
+        }
+      }
+    } else if (sq.order === 'hold' && sq.def && (sq.def.order === 'attack' || sq.def.landing || sq.reinf)) {
+      // Angriffstrupps rücken mit dem Ziel ihrer Seite weiter vor (nicht bei Verteidigungszielen)
+      sq.chk = (sq.chk || 0) - dt;
+      if (sq.chk <= 0) {
+        sq.chk = 12;
+        const o = this.g.missions.obj(sq.team), a = this.g.missions.objAnchor(sq.team);
+        if (o && a && o.type !== 'defend' && o.type !== 'survive' && sq.home.distanceTo(a) > 30) { sq.order = 'attack'; sq.target = a.clone(); sq.repaths = 0; this.requestPath(sq, a); }
+      }
     } else if (sq.order === 'patrol' && sq.route) {
       const lead = alive[0], tgt = this.g.world.anchors[sq.route[sq.routeI]];
       if (tgt && lead.pos.distanceTo(tgt) < 12) { sq.routeI = (sq.routeI + 1) % sq.route.length; this.requestPath(sq, this.g.world.anchors[sq.route[sq.routeI]]); }
@@ -384,7 +410,7 @@ export class Units {
     u.alert = Math.max(0, u.alert - dt * 0.02);
     u.firing = Math.max(0, u.firing - dt * 6);
     u.think -= dt;
-    if (u.reloadT > 0) { u.reloadT -= dt; if (u.reloadT <= 0) u.mag = u.W.mag; }
+    if (u.reloadT > 0) { u.reloadT -= dt; if (u.reloadT <= 0) u.mag = magCap(u.W); }
     // verlorener Fallschirmjäger: wartet versteckt
     if (u.lost) {
       u.stance = 1;
@@ -448,7 +474,7 @@ export class Units {
     if (engaging && goal && sq.order === 'attack') {
       u.bound = (u.bound ?? rand() * 6) - dt;
       if (u.bound < 0) u.bound = 3 + rand() * 6;
-      move = u.bound < 2.6 && u.suppress < 0.7;
+      move = (u.bound < 2.6 && u.suppress < 0.7) || u.bound < 1.0;
     } else if (engaging && goal && sq.order === 'follow') move = true;
     else if (engaging && goal && (sq.order === 'hold' || sq.order === 'static')) move = u.suppress < 0.5;
     // Haltung
@@ -555,7 +581,7 @@ export class Units {
     if (W.auto) {
       if (u.burst <= 0) { u.burst = W.id === 'mg42' ? 6 + (rand() * 12 | 0) : 3 + (rand() * 6 | 0); }
       u.burst--;
-      u.nextFire = g.time + 60 / W.rpm * (1 + rand() * 0.15) + (u.burst <= 0 ? 0.6 + rand() * 1.4 : 0);
+      u.nextFire = g.time + 60 / W.rpm * (1 + rand() * 0.15) + (u.burst <= 0 ? 0.9 + rand() * 1.8 : 0);
     } else u.nextFire = g.time + Math.max(60 / W.rpm, W.bolt ? 1.6 + rand() * 2.5 : 0.7 + rand() * 1.4) * (1 + u.suppress);
     // Streuung: Grundstreuung + Entfernung + Niederhalten + Bewegung des Ziels
     const moving = t.speed > 1 ? 1.6 : 1;
@@ -809,5 +835,8 @@ export class Units {
 
 export const ROLES = ['rifle', 'smg', 'assault', 'mg', 'sniper', 'at', 'officer'];
 export const WIDS = Object.keys(WEAPONS);
+
+// KI-MG-Schützen: Laufwechsel nach 75 Schuss (Spieler hat den vollen 250er-Gurt)
+export function magCap(W) { return W.id === 'mg42' ? 75 : W.mag; }
 
 export function lerpAngle(a, b, t) { return a + wrapAngle(b - a) * Math.min(1, t); }

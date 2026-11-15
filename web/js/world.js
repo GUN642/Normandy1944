@@ -646,7 +646,7 @@ export class World {
     const g = new Uint8Array(n * n);
     const mark = (x, z) => { const i = Math.floor((x + HALF) / NAV), j = Math.floor((z + HALF) / NAV); if (i >= 0 && j >= 0 && i < n && j < n) g[j * n + i] = 1; };
     for (const b of this.boxes) {
-      if (b.kind === 'tree' || b.soft) continue;
+      if (b.kind === 'tree' || (b.soft && !(b.kind === 'wire' && !b.cut))) continue;   // ungeschnittener Draht sperrt den Weg
       if (b.kind === 'wall' && b.y1 - this.h(b.x, b.z) < 1.2 && b.kind !== 'hedge') { /* niedrige Mauer: KI geht drum herum */ }
       const ex = b.hw + 0.4, ez = b.hd + 0.4;
       for (let u = -ex; u <= ex + 0.01; u += 1) for (let v = -ez; v <= ez + 0.01; v += 1) mark(b.x + u * b.c + v * b.s, b.z - u * b.s + v * b.c);
