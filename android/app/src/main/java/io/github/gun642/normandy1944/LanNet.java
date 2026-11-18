@@ -192,10 +192,13 @@ public class LanNet {
     }
 
     // ------------------------------------------------------------------ Spielsuche
+    private volatile int scanGen;
+
     public synchronized void scan(boolean on) {
         if (on == scanning) return;
         scanning = on;
-        if (!on) { if (scanSock != null) scanSock.close(); return; }
+        if (!on) { scanGen++; if (scanSock != null) scanSock.close(); return; }
+        final int gen = ++scanGen;
         new Thread(new Runnable() {
             public void run() {
                 DatagramSocket ds = null;
@@ -207,7 +210,7 @@ public class LanNet {
                     ds.setSoTimeout(1000);
                     scanSock = ds;
                     byte[] buf = new byte[4096];
-                    while (scanning) {
+                    while (scanning && gen == scanGen) {
                         try {
                             DatagramPacket pk = new DatagramPacket(buf, buf.length);
                             ds.receive(pk);
@@ -224,7 +227,11 @@ public class LanNet {
                         } catch (java.net.SocketTimeoutException ignored) { }
                     }
                 } catch (Exception ignored) {
-                } finally { if (ds != null) ds.close(); scanning = false; }
+                } finally {
+                    if (ds != null) ds.close();
+                    // nur der aktuelle Such-Thread darf den Zustand zurücksetzen (sonst beendet ein alter Thread die neue Suche)
+                    synchronized (LanNet.this) { if (gen == scanGen) scanning = false; }
+                }
             }
         }, "n44-scan").start();
     }

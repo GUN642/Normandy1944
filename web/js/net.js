@@ -460,6 +460,7 @@ export class Net {
         break;
       }
       case 'rev': { const u = g.units.byId.get(m.u); if (u && u.downed) g.units.revive(u, 55); break; }
+      case 'drg': { const av = g.avatars.get(p); if (av) { const u = m.u ? g.units.byId.get(m.u) : null; av.dragging = u && u.downed ? u : null; } break; }
       case 'rvp': {
         // ein Spieler verarztet einen anderen Spieler
         const from = this.players.get(p) || { name: g.playerName() };
@@ -511,6 +512,7 @@ export class Net {
       case 'vids': g.comms.onVids(m.l); break;
       case 'ptt': g.comms.onPtt(m.p, !!m.on, String(m.n || '').slice(0, 16)); break;
       case 'kf': g.feed(m.k, m.v); break;
+      case 'kc': g.onNetKill(m); break;
       case 'result': g.missions.finish(m.w, m.r); break;
       case 'radio': g.radio(m.x, m.f, !!m.u); break;
     }

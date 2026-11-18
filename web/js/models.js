@@ -129,7 +129,7 @@ function soldierParts(uni) {
   const push = (list, m) => list.forEach((p) => far.push({ geo: p.geo, color: p.color, matrix: m.clone().multiply(p.matrix) }));
   push(torso, M4(0, 0.95, 0)); push(head, M4(0, 1.5, 0));
   push(thigh, M4(0.1, 0.97, 0)); push(thigh, M4(-0.1, 0.97, 0)); push(shin, M4(0.1, 0.53, 0)); push(shin, M4(-0.1, 0.53, 0));
-  push(upperArm, M4(0.24, 1.42, 0, 0, -0.9, 0)); push(upperArm, M4(-0.24, 1.42, 0, 0, -0.9, 0));
+  push(upperArm, M4(0.24, 1.42, 0, 0, 1.0, 0)); push(upperArm, M4(-0.24, 1.42, 0, 0, 1.0, 0));
   parts.far = mergeColored(far);
   SOLDIER_CACHE.set(key, parts);
   return parts;
@@ -205,8 +205,9 @@ export class SoldierRig {
     this.aim.add(w);
     // Arme zur Waffe ausrichten: rechte Hand am Griff, linke vorn
     const pistol = WEAPONS[id] && WEAPONS[id].pistol;
-    this.armR.g.rotation.set(-1.25, 0, 0.15); this.armR.el.rotation.set(-0.5, 0, 0);
-    this.armL.g.rotation.set(pistol ? -1.3 : -1.1, 0, pistol ? -0.4 : -0.5); this.armL.el.rotation.set(pistol ? -0.3 : -0.9, 0, 0);
+    // Oberarme nach vorn zur Waffe (positive X-Drehung), Unterarme angewinkelt, Hände zur Mitte
+    this.armR.g.rotation.set(1.15, 0, -0.12); this.armR.el.rotation.set(0.55, 0, 0);
+    this.armL.g.rotation.set(pistol ? 1.35 : 1.25, 0, pistol ? 0.45 : 0.35); this.armL.el.rotation.set(pistol ? 0.25 : 0.45, 0, 0);
   }
 
   // Pose: speed (m/s), stance 0 stehen,1 hocken,2 liegen, pitch (Zielen), dt, dead (0..1 Fallfortschritt)

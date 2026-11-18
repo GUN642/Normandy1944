@@ -836,8 +836,10 @@ export class Units {
     u.deadT += dt;
     if (u.downed) {
       // ziehen: Verwundeter hängt hinter dem Spieler
-      const pl = this.g.player;
-      if (pl.dragging === u) {
+      const host = !this.g.net || this.g.net.isHost;
+      let pl = this.g.player;
+      if (pl.dragging !== u && host && this.g.net) { for (const av of this.g.avatars.values()) if (av.dragging === u && av.alive && av.visible) { pl = av; break; } }
+      if (pl.dragging === u && host) {
         const bx = pl.pos.x + Math.sin(pl.yaw) * 1.1, bz = pl.pos.z + Math.cos(pl.yaw) * 1.1;
         u.pos.x += (bx - u.pos.x) * Math.min(1, dt * 8); u.pos.z += (bz - u.pos.z) * Math.min(1, dt * 8);
         u.pos.y = this.g.world.groundAt(u.pos.x, u.pos.z, u.pos.y + 0.5);
@@ -845,7 +847,7 @@ export class Units {
         u.rig.root.position.copy(u.pos); u.rig.root.rotation.y = u.yaw;
         if (u.pool) u.pool.visible = false;
       }
-      if (!this.g.net || this.g.net.isHost) { u.bleed -= dt * (pl.dragging === u ? 0.5 : 1); if (u.bleed <= 0) { u.downed = false; u.deadT = 0; if (u.marker) u.marker.visible = false; } }
+      if (host) { u.bleed -= dt * (pl.dragging === u ? 0.5 : 1); if (u.bleed <= 0) { u.downed = false; u.deadT = 0; if (u.marker) u.marker.visible = false; } }
       if (u.pool && u.poolS < 1.3 && pl.dragging !== u) { u.poolS += dt * 0.04; u.pool.scale.set(u.poolS, u.poolS, 1); }
       this.mark(u, this.g.camera.position.distanceTo(u.pos));
     } else if (u.marker) u.marker.visible = false;

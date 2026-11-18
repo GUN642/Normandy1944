@@ -313,6 +313,11 @@ class Game {
     } else if (owner && owner.pid !== undefined && this.net) {
       const pl = this.net.players.get(owner.pid);
       if (pl) { pl.k++; pl.score += 10; this.feed(pl.name, u.name, head); }
+      // Abschuss dem Mitspieler gutschreiben (Trefferanzeige, Punkte, Statistik)
+      if (this.net.isHost && owner.pid !== 0) {
+        this.net.sendTo(owner.pid, { t: 'kc', n: u.name, h: head ? 1 : 0 });
+        if (pl) this.net.relay(owner.pid, { t: 'kf', k: pl.name, v: u.name });
+      }
     }
   }
   onTankKilled(t, owner) {
@@ -407,16 +412,34 @@ class Game {
     this.hud.toast(T(`${by} hat Sie verarztet`, `${by} patched you up`));
     this.audio.play('mag', null, 0.4);
   }
+  onNetKill(m) {
+    this.stats.kills++; this.session.kills++;
+    this.hud.hit(!!m.h, true);
+    this.score(m.h ? 15 : 10);
+    this.feed(this.playerName(), m.n || '?', !!m.h);
+  }
   applyNetDamage(m) {
     const dir = new THREE.Vector3(m.r ? m.r[0] : 0, 0, m.r ? m.r[1] : 0);
     this.lastKiller = { name: m.f, pid: m.fp };
     this.damagePlayer(m.a * this.difficultyDmg(), dir.lengthSq() ? dir : null, { pid: m.fp }, !!m.h);
   }
   netHitAvatar(av, d, owner, dir, head) {
-    if (!this.net || !(owner && owner.local)) return;
-    if (av.team === this.player.team && this.mode !== 'versus') return;
-    this.hud.hit(head, false);
-    this.net.hitPlayer(av.pid, d, head, dir || new THREE.Vector3());
+    if (!this.net) return;
+    if (owner && owner.local) {
+      if (av.team === this.player.team && this.mode !== 'versus') return;
+      this.hud.hit(head, false);
+      this.net.hitPlayer(av.pid, d, head, dir || new THREE.Vector3());
+      return;
+    }
+    // Host: KI-Geschosse, Panzer, Artillerie und Granaten treffen die Mitspieler (vorher verworfen → Mitspieler unverwundbar)
+    if (!this.net.isHost || av.pid === undefined) return;
+    if (owner && (owner.uid || owner.tank) && owner.team === av.team) return;
+    let name = T('Feind', 'Enemy');
+    if (owner && owner.uid) { const u = this.units.byId.get(owner.uid); if (u) name = u.name; }
+    else if (owner && owner.support) name = T('Artillerie', 'Artillery');
+    else if (owner && owner.tank) name = T('Panzer', 'Tank');
+    const r = dir ? [Math.round(dir.x * 100) / 100, Math.round(dir.z * 100) / 100] : [0, 0];
+    this.net.sendTo(av.pid, { t: 'pdmg', a: Math.round(d), r, h: head ? 1 : 0, f: name, fp: -1 });
   }
 
   playerDied(owner, cause) {
@@ -586,12 +609,17 @@ class Game {
     const p = this.player;
     const med = p.inBoat || p.chute ? null : this.medAction(p);
     this.medicContext = !!med || !!p.dragging;
-    // Ziehen: H (Verband-Taste) packt den Verwundeten bzw. lässt ihn los
-    if (inp.pressed('heal')) {
+    // Ziehen: H (Verband-Taste) bzw. am Controller Y oder Steuerkreuz runter packt den Verwundeten bzw. lässt ihn los
+    const pad = inp.device === 'gamepad';
+    const dragKey = inp.pressed('heal') || (pad && this.medicContext && inp.pressed('wnext'));
+    const before = p.dragging;
+    if (dragKey) {
       if (p.dragging) { p.dragging = null; this.hud.toast(T('Losgelassen', 'Released')); }
-      else if (med && med.u && med.kind === 'revive' && (!this.net || this.net.isHost)) { p.dragging = med.u; p.ads = 0; this.hud.toast(T('Ziehe Verwundeten – H loslassen', 'Dragging the wounded – H to release')); }
+      else if (med && med.u && med.kind === 'revive') { p.dragging = med.u; p.ads = 0; this.hud.toast(pad ? T('Ziehe Verwundeten – Y: loslassen', 'Dragging the wounded – Y: let go') : T('Ziehe Verwundeten – H loslassen', 'Dragging the wounded – H to release')); }
     }
-    if (p.dragging && (!p.dragging.downed || p.dragging.pos.distanceTo(p.pos) > 4)) p.dragging = null;
+    if (p.dragging && (!p.dragging.downed || p.dragging.pos.distanceTo(p.pos) > 4.5)) p.dragging = null;
+    // Mitspieler (Client): der Host bewegt den Verwundeten
+    if (before !== p.dragging && this.net && !this.net.isHost) this.net.send({ t: 'drg', u: p.dragging ? p.dragging.uid : 0 });
     const act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || med || this.ammoAction(p));
     this.interactHint = act;
     if (act && inp.held('use')) {
@@ -629,8 +657,8 @@ class Game {
     }
     if (!best) return null;
     if (kind === 'bandage') return { kind, u: best, text: T('E halten: Kamerad verbinden (Verband)', 'Hold E: bandage comrade'), time: 2 };
-    const canDrag = !this.net || this.net.isHost;
-    return { kind, u: best, text: T('E halten: verarzten', 'Hold E: patch up') + (canDrag ? (p.dragging ? T(' · H: loslassen', ' · H: let go') : T(' · H: in Deckung ziehen', ' · H: drag to cover')) : ''), time: 3.5 };
+    if (this.input.device === 'gamepad') return { kind, u: best, text: T('R halten: verarzten', 'Hold R: patch up') + (p.dragging ? T(' · Y: loslassen', ' · Y: let go') : T(' · Y: in Deckung ziehen', ' · Y: drag to cover')), time: 3.5 };
+    return { kind, u: best, text: T('E halten: verarzten', 'Hold E: patch up') + (p.dragging ? T(' · H: loslassen', ' · H: let go') : T(' · H: in Deckung ziehen', ' · H: drag to cover')), time: 3.5 };
   }
 
   // Munition: lebender Kamerad (alle 90 s), Funker (füllt auf) oder Gefallener (einmal)
@@ -957,7 +985,7 @@ class Game {
     // Hauptmenü
     on('m-campaign', () => { this.renderCampaign(this.campSide || 'us'); this.showMenu('campaign'); });
     on('m-free', () => { this.renderFree(); this.showMenu('free'); });
-    on('m-mp', () => { this.renderMp(); this.showMenu('mp'); });
+    on('m-mp', () => { this.showMenu('mp'); this.renderMp(); });
     on('m-settings', () => { this.renderSettings(); this.settingsBack = 'menu'; this.showMenu('settings'); });
     on('m-help', () => this.showMenu('help'));
     on('m-history', () => this.showMenu('history'));
@@ -1054,24 +1082,39 @@ class Game {
     if (isApp) {
       const tr = this.lanTr || (this.lanTr = netTransport());
       if (tr && tr.scan) {
-        try { tr.scan(false); } catch (_) { /* egal */ }
-        setTimeout(() => { try { tr.scan(true); } catch (_) { /* egal */ } }, 250);
+        // wie im Medevac-sim: Suche einfach einschalten (Java ignoriert doppeltes Einschalten, startet sie aber neu,
+        // falls der Such-Thread beendet wurde, z. B. nach Verlassen eines Spiels)
+        try { tr.scan(true); } catch (_) { /* egal */ }
         const myIp = tr.ip ? tr.ip() : '';
         const t0 = performance.now();
         clearTimeout(this._lanT);
+        let hiddenN = 0;
         const upd = () => {
-          if ($('s-mp').classList.contains('hidden')) { try { tr.scan(false); } catch (_) { /* egal */ } return; }
+          if ($('s-mp').classList.contains('hidden')) {
+            // erst nach mehreren Prüfungen abschalten (Menü wird evtl. gerade erst eingeblendet)
+            if (++hiddenN >= 3) { try { tr.scan(false); } catch (_) { /* egal */ } this._lanHtml = null; return; }
+            this._lanT = setTimeout(upd, 800); return;
+          }
+          hiddenN = 0;
+          try { tr.scan(true); } catch (_) { /* egal */ }
           let hs = [];
           try { hs = tr.hosts() || []; } catch (_) { hs = []; }
+          // nur Normandy-Spiele (gleiche Ports wie Medevac-sim)
+          hs = hs.filter((h) => h && h.info && opById(h.info.op));
           const html = hs.map((h) => `<button class="btn" data-ip="${esc(h.ip)}" data-port="${h.port}">▶ ${esc((h.info && h.info.name) || '?')} – ${esc(L((opById(h.info && h.info.op) || {}).title || ''))} (${(h.info && h.info.n) || 1} ${T('Spieler', 'players')})</button>`).join('');
           if (html !== this._lanHtml) {
+            const wasEmpty = !this._lanHtml;
             this._lanHtml = html;
             $('mp-lanlist').innerHTML = html;
             $('mp-lanlist').querySelectorAll('button').forEach((bt) => bt.onclick = () => { this.settings.name = $('mp-name').value.trim() || this.playerName(); saveSettings(this.settings); this.joinGame(bt.dataset.ip, +bt.dataset.port); });
+            // Controller/Fernbedienung: erstes gefundenes Spiel gleich anwählen
+            const first = $('mp-lanlist').querySelector('button');
+            const ae = document.activeElement;
+            if (wasEmpty && first && !(ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT'))) try { first.focus(); } catch (_) { /* egal */ }
           }
           const secs = Math.round((performance.now() - t0) / 1000);
-          $('mp-lanstat').textContent = (hs.length ? '' : T('Suche läuft … ', 'Searching … ') + (secs > 8 ? T('Noch nichts gefunden: Host muss das Spiel in der App eröffnen und im selben WLAN sein. Alternativ: Code oder IP des Hosts unten eingeben.', 'Nothing yet: the host must start the game in the app on the same Wi-Fi. Alternatively enter the host\'s code or IP below.') : '')) + (myIp ? '  ·  ' + T('Eigene IP: ', 'Own IP: ') + myIp : '');
-          this._lanT = setTimeout(upd, 1000);
+          $('mp-lanstat').textContent = (hs.length ? T(`${hs.length} Spiel(e) im WLAN gefunden`, `${hs.length} game(s) found on Wi-Fi`) : T('Suche läuft … ', 'Searching … ') + (secs > 8 ? T('Noch nichts gefunden: Host muss das Spiel in der App eröffnen und im selben WLAN sein. Alternativ: Code oder IP des Hosts unten eingeben.', 'Nothing yet: the host must start the game in the app on the same Wi-Fi. Alternatively enter the host\'s code or IP below.') : '')) + (myIp ? '  ·  ' + T('Eigene IP: ', 'Own IP: ') + myIp : '');
+          this._lanT = setTimeout(upd, 800);
         };
         this._lanHtml = null;
         upd();

@@ -753,7 +753,7 @@ export class World {
       a = b;
     }
     if (found) out.push([bx, bz]);
-    return out;
+    return out.length ? out : null;   // leerer Weg → null (Aufrufer setzen dann ein direktes Ziel)
   }
   navLine(ax, az, bx, bz) {
     const d = Math.hypot(bx - ax, bz - az), steps = Math.ceil(d / 1.2);

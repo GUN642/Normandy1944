@@ -312,7 +312,7 @@ export class Player {
     const swim = g.world.waterDepth(this.pos.x, this.pos.z) > 1.45;
     // Waffenwahl
     for (let i = 0; i < 5; i++) if (inp.pressed('w' + (i + 1))) this.select(i);
-    if (inp.pressed('wnext')) this.select((this.cur + 1) % this.weapons.length);
+    if (inp.pressed('wnext') && !(g.medicContext && inp.device === 'gamepad')) this.select((this.cur + 1) % this.weapons.length);
     if (inp.pressed('grenade')) { const gi = this.weapons.findIndex((w) => WEAPONS[w].grenade && !WEAPONS[w].smoke); if (gi >= 0 && this.ammo[this.weapons[gi]].res > 0) { this.prevW = this.cur; this.select(gi); this.quickNade = true; } }
     // Zielen
     const wantAds = inp.held('aim') && !this.sprinting && !W.grenade && this.reloading <= 0 && !swim;
