@@ -32,11 +32,12 @@ export function mergeColored(parts) {
     count += g.attributes.position.count;
     return g;
   });
-  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), col = new Float32Array(count * 3);
+  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), col = new Float32Array(count * 3), uvs = new Float32Array(count * 2);
   let o = 0;
   const c = new THREE.Color();
   parts.forEach((p, k) => {
-    const g = geos[k], P = g.attributes.position, N = g.attributes.normal;
+    const g = geos[k], P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+    const us = p.uvScale || 1;
     _m.copy(p.matrix || _m.identity());
     if (!p.matrix) _m.identity();
     _n.getNormalMatrix(_m);
@@ -47,6 +48,7 @@ export function mergeColored(parts) {
       pos[o * 3] = _v.x; pos[o * 3 + 1] = _v.y; pos[o * 3 + 2] = _v.z;
       _v.fromBufferAttribute(N, i).applyMatrix3(_n).normalize();
       nor[o * 3] = _v.x; nor[o * 3 + 1] = _v.y; nor[o * 3 + 2] = _v.z;
+      if (U && !p.nouv) { uvs[o * 2] = U.getX(i) * us; uvs[o * 2 + 1] = U.getY(i) * us; } else { uvs[o * 2] = 0.02; uvs[o * 2 + 1] = 0.02; }
       let f = 1;
       if (shade) f = shade(pos[o * 3], pos[o * 3 + 1], pos[o * 3 + 2]);
       col[o * 3] = c.r * f; col[o * 3 + 1] = c.g * f; col[o * 3 + 2] = c.b * f;
@@ -57,6 +59,7 @@ export function mergeColored(parts) {
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   out.computeBoundingSphere();
   return out;
 }
@@ -115,7 +118,7 @@ export const M4s = (x, y, z, ry, sx, sy, sz) => new THREE.Matrix4().compose(new 
 function canvasTex(size, draw, repeat = true) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   draw(ctx, size);
   const t = new THREE.CanvasTexture(c);
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -261,12 +264,84 @@ export function tex(name) {
         c.fillStyle = '#fff'; for (let y = 0; y < 9; y++) for (let x = 0; x < (y % 2 ? 5 : 6); x++) c.fillRect(4 + x * 9 + (y % 2 ? 4.5 : 0), 3 + y * 7.4, 2.4, 2.4);
       }, false);
       break;
+    case 'fabric':     // Uniformstoff: Köperbindung (Diagonalgrat) + Faserrauschen, hell (wird mit der Uniformfarbe multipliziert)
+      t = canvasTex(128, (c, s) => {
+        c.fillStyle = '#e4e4e4'; c.fillRect(0, 0, s, s);
+        for (let y = 0; y < s; y++) for (let x = 0; x < s; x += 1) { if ((x + y) % 4 < 2) { c.fillStyle = 'rgba(0,0,0,0.07)'; c.fillRect(x, y, 1, 1); } }
+        for (let i = 0; i < 2500; i++) { c.fillStyle = `rgba(${rnd() > 0.5 ? '255,255,255' : '0,0,0'},${rnd() * 0.08})`; c.fillRect(rnd() * s, rnd() * s, 1 + rnd() * 2, 1); }
+        for (let i = 0; i < 10; i++) { c.fillStyle = `rgba(60,50,30,${0.03 + rnd() * 0.05})`; c.beginPath(); c.arc(rnd() * s, rnd() * s, 4 + rnd() * 14, 0, 7); c.fill(); }   // Schmutz
+      });
+      break;
+    case 'grain':      // Holzmaserung (Nussbaum/Buche) für Waffenschäfte, hell (mit Materialfarbe multipliziert)
+      t = canvasTex(256, (c, s) => {
+        c.fillStyle = '#d0d0d0'; c.fillRect(0, 0, s, s);
+        for (let i = 0; i < 70; i++) {
+          let y = rnd() * s; const v = 120 + rnd() * 110 | 0;
+          c.strokeStyle = `rgba(${v * 0.6 | 0},${v * 0.45 | 0},${v * 0.3 | 0},${0.25 + rnd() * 0.3})`; c.lineWidth = 0.6 + rnd() * 1.8;
+          c.beginPath(); c.moveTo(0, y);
+          for (let x = 0; x <= s; x += 8) { y += (rnd() - 0.5) * 2.2; c.lineTo(x, y + Math.sin(x * 0.03 + i) * 2); }
+          c.stroke();
+        }
+        for (let i = 0; i < 6; i++) { const x = rnd() * s, y = rnd() * s; c.strokeStyle = 'rgba(60,35,20,0.35)'; c.lineWidth = 1; for (let r = 2; r < 10; r += 2) { c.beginPath(); c.ellipse(x, y, r * 2.2, r * 0.7, 0, 0, 7); c.stroke(); } }   // Astansätze
+      });
+      break;
+    case 'scratch':    // Metall: Rauheit mit Kratzern und abgegriffenen Stellen (für roughnessMap, grau = Grundrauheit)
+      t = canvasTex(256, (c, s) => {
+        c.fillStyle = '#9a9a9a'; c.fillRect(0, 0, s, s);
+        for (let i = 0; i < 2600; i++) { const v = 110 + rnd() * 90 | 0; c.fillStyle = `rgba(${v},${v},${v},0.25)`; c.fillRect(rnd() * s, rnd() * s, 2, 2); }
+        c.lineWidth = 0.7;
+        for (let i = 0; i < 160; i++) { const x = rnd() * s, y = rnd() * s, a = rnd() * 6.28, l = 4 + rnd() * 26, v = 40 + rnd() * 50 | 0; c.strokeStyle = `rgba(${v},${v},${v},0.7)`; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+        for (let i = 0; i < 8; i++) { const g = c.createRadialGradient(0, 0, 0, 0, 0, 30); const x = rnd() * s, y = rnd() * s; g.addColorStop(0, 'rgba(50,50,50,0.5)'); g.addColorStop(1, 'rgba(50,50,50,0)'); c.save(); c.translate(x, y); c.fillStyle = g; c.fillRect(-30, -30, 60, 60); c.restore(); }   // blank gegriffen
+      });
+      t.colorSpace = THREE.NoColorSpace;
+      break;
+    case 'skin':       // Haut: leichte Poren/Rötung
+      t = canvasTex(64, (c, s) => {
+        c.fillStyle = '#e8e2dc'; c.fillRect(0, 0, s, s);
+        for (let i = 0; i < 900; i++) { c.fillStyle = `rgba(${rnd() > 0.6 ? '170,90,80' : '255,250,245'},${rnd() * 0.12})`; c.fillRect(rnd() * s, rnd() * s, 1, 1); }
+      });
+      break;
     case 'flag_fr':
       t = canvasTex(64, (c) => { c.fillStyle = '#0055a4'; c.fillRect(0, 0, 22, 64); c.fillStyle = '#fff'; c.fillRect(22, 0, 21, 64); c.fillStyle = '#ef4135'; c.fillRect(43, 0, 21, 64); }, false);
       break;
   }
   TEX[name] = t;
   return t;
+}
+
+// Normal Map aus der Helligkeit einer prozeduralen Textur (Sobel): Fugen, Steine, Stoff und Maserung bekommen Relief
+export function normalTex(name, strength = 2) {
+  const key = 'n:' + name + ':' + strength;
+  if (TEX[key]) return TEX[key];
+  const img = tex(name).image, s = img.width;
+  const d = img.getContext('2d').getImageData(0, 0, s, s).data;
+  const L = new Float32Array(s * s);
+  for (let i = 0; i < s * s; i++) L[i] = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) / 255;
+  const c = document.createElement('canvas'); c.width = c.height = s;
+  const ctx = c.getContext('2d'), out = ctx.createImageData(s, s), o = out.data;
+  const at = (x, y) => L[((y + s) % s) * s + ((x + s) % s)];
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+    const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+    const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+    let nx = -dx * strength, ny = dy * strength, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    const k = (y * s + x) * 4; o[k] = (nx * 0.5 + 0.5) * 255; o[k + 1] = (ny * 0.5 + 0.5) * 255; o[k + 2] = (nz * 0.5 + 0.5) * 255; o[k + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 4;
+  TEX[key] = t;
+  return t;
+}
+
+// Umgebungslicht aus dem aktuellen Himmel (für physikalische Materialien: Metall glänzt, Stoff wirkt matt)
+export function skyEnvironment(renderer, sky, old) {
+  if (old) old.dispose();
+  const pm = new THREE.PMREMGenerator(renderer);
+  const sc = new THREE.Scene();
+  const m = new THREE.Mesh(sky.geometry, sky.material); m.scale.setScalar(50); sc.add(m);
+  const rt = pm.fromScene(sc, 0.02, 0.1, 200);
+  pm.dispose();
+  return rt;
 }
 
 // ------------------------------------------------------------ Himmel (Verlauf + Wolken + Sonne/Mond)

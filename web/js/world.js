@@ -3,10 +3,10 @@ import * as THREE from './lib/three.module.min.js';
 import { makeNoise } from './noise.js';
 import { makeRng, clamp, segDist, smoothstep } from './util.js';
 import { MAPS } from './maps.js';
-import { tex, mergeColored, M4 } from './gfx.js';
+import { tex, normalTex, mergeColored, M4 } from './gfx.js';
 import {
   initMaterials, MAT, buildHouse, buildChurch, buildBunker, buildSandbags, buildRuin, buildGun,
-  hedgehogGeo, stakeGeo, wireGeo, buildFlagpole,
+  hedgehogGeo, stakeGeo, wireGeo, buildFlagpole, isPBR,
 } from './models.js';
 
 export const SIZE = 900, HALF = 450;
@@ -295,7 +295,7 @@ export class World {
       }
     }
     if (bank.length) {
-      const m = new THREE.Mesh(mergeColored(bank), new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('grass') }));
+      const m = new THREE.Mesh(mergeColored(bank), isPBR() ? new THREE.MeshStandardMaterial({ vertexColors: true, map: tex('grass'), normalMap: normalTex('grass', 1.4), roughness: 1 }) : new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('grass') }));
       // UVs für Detailtextur fehlen bei mergeColored – Weltkoordinaten-Projektion im Shader
       m.material.onBeforeCompile = (sh) => {
         sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vW;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvW = (modelMatrix*vec4(position,1.0)).xyz;');
@@ -674,7 +674,8 @@ export class World {
     }
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     geo.computeVertexNormals();
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('grass') });
+    // ab „Mittel“: physikalisches Material mit Bodenrelief (Grasbüschel, Erde)
+    const mat = isPBR() ? new THREE.MeshStandardMaterial({ vertexColors: true, map: tex('grass'), normalMap: normalTex('grass', 1.4), roughness: 1, metalness: 0 }) : new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('grass') });
     mat.onBeforeCompile = (sh) => {
       sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
         vec4 dt = texture2D(map, vMapUv);

@@ -1,13 +1,38 @@
 // 3D-Modelle: Soldaten, Gebäude, Befestigungen, Fahrzeuge, Flugzeuge, Boote, Geschütze.
 // Alles prozedural; statische Teile werden mit Vertexfarben zusammengefasst (wenige Draw-Calls).
 import * as THREE from './lib/three.module.min.js';
-import { mergeColored, mergeTextured, boxUV, M4, M4s, tex } from './gfx.js';
+import { mergeColored, mergeTextured, boxUV, M4, M4s, tex, normalTex } from './gfx.js';
 import { WEAPONS } from './weapons.js';
 
 export const MAT = {};
+// Grafikstufe: ab „Mittel“ physikalisch basierte Materialien mit Oberflächenrelief (Normal Maps), darunter schnelle Lambert-Materialien
+let PBR = false;
+export function setPBR(on) { if (on !== PBR) { PBR = on; for (const k in MAT) delete MAT[k]; } }
+export function isPBR() { return PBR; }
 export function initMaterials() {
   if (MAT.vc) return MAT;
+  if (PBR) {
+    const S = (o) => new THREE.MeshStandardMaterial(o);
+    MAT.vc = S({ vertexColors: true, roughness: 0.86, metalness: 0 });
+    MAT.vcStd = S({ vertexColors: true, roughness: 0.75, metalness: 0.1 });
+    MAT.metal = S({ vertexColors: true, roughness: 0.5, metalness: 0.6, roughnessMap: tex('scratch') });
+    MAT.burnt = S({ vertexColors: true, roughness: 0.95, metalness: 0.3, color: 0x2c2a26 });
+    MAT.stone = S({ map: tex('stone'), normalMap: normalTex('stone', 3), vertexColors: true, roughness: 0.95 });
+    MAT.plaster = S({ map: tex('plaster'), normalMap: normalTex('plaster', 2), vertexColors: true, roughness: 0.92 });
+    MAT.slate = S({ map: tex('slate'), normalMap: normalTex('slate', 3), vertexColors: true, roughness: 0.6, metalness: 0.05 });
+    MAT.tile = S({ map: tex('tile'), normalMap: normalTex('tile', 3), vertexColors: true, roughness: 0.8 });
+    MAT.concrete = S({ map: tex('concrete'), normalMap: normalTex('concrete', 2), vertexColors: true, roughness: 0.9 });
+    MAT.woodT = S({ map: tex('wood'), normalMap: normalTex('wood', 2), vertexColors: true, roughness: 0.85 });
+    MAT.soldier = S({ vertexColors: true, map: tex('fabric'), normalMap: normalTex('fabric', 1.6), roughness: 0.93, metalness: 0 });
+    MAT.splinter = S({ map: tex('splinter'), normalMap: normalTex('fabric', 1.6), roughness: 0.93 });
+    MAT.dark = new THREE.MeshBasicMaterial({ color: 0x0b0a09 });
+    MAT.glassWin = S({ color: 0x1e2428, roughness: 0.1, metalness: 0.4 });
+    MAT.chute = S({ color: 0xd8d2bc, side: THREE.DoubleSide, roughness: 0.8, normalMap: normalTex('fabric', 1) });
+    MAT.chuteOD = S({ color: 0x6f6d4c, side: THREE.DoubleSide, roughness: 0.85, normalMap: normalTex('fabric', 1) });
+    return MAT;
+  }
   MAT.vc = new THREE.MeshLambertMaterial({ vertexColors: true });
+  MAT.soldier = MAT.vc;
   MAT.vcStd = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 });
   MAT.metal = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.55 });
   MAT.burnt = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.3, color: 0x2c2a26 });
@@ -67,9 +92,20 @@ function soldierParts(uni) {
   const U = uni;
   const cap = (r, l, sx = 1, sz = 1) => { const g = new THREE.CapsuleGeometry(r, l, 3, 10); g.scale(sx, 1, sz); return g; };
   const de = !!(U.stiefel || U.fj);
-  // Rumpf: abgerundet, Jacke mit Schößen, Kragen, Koppel, Taschen
+  // Drehkörper aus einem Profil [Radius, Höhe] (Körperformen: Brustkorb, Taille, Waden …), unten/oben geschlossen
+  const lathe = (pts, sx = 1, sz = 1, seg = 14) => {
+    const P = [[0, pts[0][1]], ...pts, [0, pts[pts.length - 1][1]]].map(([r, y]) => new THREE.Vector2(r, y));
+    const g = new THREE.LatheGeometry(P, seg); g.scale(sx, 1, sz); g.computeVertexNormals(); return g;
+  };
+  // Rumpf: Brustkorb breiter als Taille, abfallende Schultern, flacher Querschnitt; Jacke mit Schößen, Knopfleiste, Kragen, Koppel
   const torso = [
-    { geo: cap(0.165, 0.3, 1.08, 0.66), color: U.jacket, matrix: M4(0, 0.29, 0) },
+    { geo: lathe([[0.15, -0.04], [0.165, 0.05], [0.158, 0.15], [0.168, 0.26], [0.182, 0.36], [0.178, 0.43], [0.15, 0.49], [0.1, 0.535], [0.065, 0.555]], 1.14, 0.62), color: U.jacket, matrix: M4(0, 0, 0) },
+    { geo: geo.sph(0.066, 10, 8), color: U.jacket, matrix: M4s(0.17, 0.45, 0, 0, 1, 0.85, 1) },
+    { geo: geo.sph(0.066, 10, 8), color: U.jacket, matrix: M4s(-0.17, 0.45, 0, 0, 1, 0.85, 1) },
+    { geo: geo.box(0.035, 0.42, 0.012), color: U.jacket, matrix: M4(0.012, 0.27, -0.112) },
+    ...[0.42, 0.33, 0.24, 0.15].map((y) => ({ geo: geo.cyl(0.009, 0.009, 0.006, 8), color: de ? 0x6a6a60 : 0x4a4a38, matrix: M4(0.012, y, -0.119, 0, Math.PI / 2) })),
+    { geo: geo.box(0.085, 0.03, 0.022), color: U.jacket, matrix: M4(0.085, 0.405, -0.12, 0, 0.1) },
+    { geo: geo.box(0.085, 0.03, 0.022), color: U.jacket, matrix: M4(-0.085, 0.405, -0.12, 0, 0.1) },
     { geo: geo.cyl(0.19, 0.2, 0.16, 12), color: U.jacket, matrix: M4s(0, 0.02, 0, 0, 1, 1, 0.68) },          // Jackenschöße
     { geo: geo.cyl(0.07, 0.085, 0.07, 10), color: U.jacket, matrix: M4(0, 0.535, -0.005) },                      // Kragen
     { geo: geo.cyl(0.183, 0.183, 0.055, 12), color: U.web, matrix: M4s(0, 0.075, 0, 0, 1, 1, 0.7) },          // Koppel
@@ -80,7 +116,8 @@ function soldierParts(uni) {
     { geo: geo.box(0.07, 0.07, 0.02), color: U.jacket, matrix: M4(-0.085, 0.36, -0.118) },
     { geo: geo.box(0.26, 0.3, 0.12), color: U.pack, matrix: M4(0, 0.32, 0.16) },                                // Gepäck
     { geo: geo.cyl(0.06, 0.06, 0.26, 8), color: U.pack, matrix: M4(0, 0.5, 0.17, 0, 0, Math.PI / 2) },          // Deckenrolle
-    { geo: geo.cyl(0.055, 0.06, 0.08, 10), color: U.skin, matrix: M4(0, 0.585, -0.01) },                        // Hals
+    { geo: geo.cyl(0.05, 0.058, 0.09, 10), color: U.skin, matrix: M4(0, 0.585, -0.005) },                        // Hals
+    { geo: new THREE.CylinderGeometry(0.072, 0.08, 0.045, 12, 1, true), color: U.jacket, matrix: M4s(0, 0.555, 0, 0, 1, 1, 0.9) },   // Kragen
   ];
   if (de) {
     torso.push({ geo: geo.box(0.17, 0.15, 0.07), color: 0x6c6146, matrix: M4(-0.17, 0.0, 0.1) });               // Brotbeutel
@@ -99,8 +136,11 @@ function soldierParts(uni) {
   if (U.diamond) torso.push({ geo: geo.box(0.02, 0.06, 0.12), color: U.diamond, matrix: M4(0, 0.36, 0.25) });
   // Kopf mit Gesicht
   const head = [
-    { geo: geo.sph(0.1, 14, 12), color: U.skin, matrix: M4s(0, 0.1, 0, 0, 0.93, 1.1, 1) },
-    { geo: geo.box(0.026, 0.045, 0.035), color: U.skin, matrix: M4(0, 0.095, -0.097, 0, 0.25) },                 // Nase
+    { geo: geo.sph(0.1, 18, 14), color: U.skin, matrix: M4s(0, 0.11, 0.005, 0, 0.92, 1.08, 1) },                 // Schädel
+    { geo: geo.sph(0.075, 14, 10), color: U.skin, matrix: M4s(0, 0.05, -0.022, 0, 1.05, 0.85, 1) },              // Kiefer/Kinn
+    { geo: geo.sph(0.03, 8, 6), color: U.skin, matrix: M4s(0.05, 0.085, -0.075, 0, 1, 0.8, 0.8) },               // Wangen
+    { geo: geo.sph(0.03, 8, 6), color: U.skin, matrix: M4s(-0.05, 0.085, -0.075, 0, 1, 0.8, 0.8) },
+    { geo: new THREE.ConeGeometry(0.017, 0.048, 4), color: U.skin, matrix: M4(0, 0.098, -0.1, Math.PI / 4, -0.35) },   // Nase
     { geo: geo.box(0.022, 0.01, 0.01), color: 0x2a2018, matrix: M4(0.035, 0.125, -0.092) },                       // Augen
     { geo: geo.box(0.022, 0.01, 0.01), color: 0x2a2018, matrix: M4(-0.035, 0.125, -0.092) },
     { geo: geo.box(0.03, 0.007, 0.008), color: 0x5a3a2a, matrix: M4(0.035, 0.142, -0.094) },                      // Brauen
@@ -114,20 +154,24 @@ function soldierParts(uni) {
     { geo: geo.box(0.17, 0.012, 0.012), color: 0x2a2a2a, matrix: M4(0, 0.03, -0.06) },                             // Kinnriemen
   ];
   if (U.net) head.push({ geo: geo.sph(0.152, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), color: 0x3d3f2a, matrix: M4s(0, 0.133, 0.008, 0, 1, 0.75, 1) });
-  const upperArm = [{ geo: cap(0.052, 0.22), color: U.jacket, matrix: M4(0, -0.15, 0) }];
+  const upperArm = [{ geo: lathe([[0.05, 0.04], [0.058, 0.0], [0.054, -0.1], [0.048, -0.22], [0.046, -0.3]]), color: U.jacket, matrix: M4(0, 0, 0) }];
   const foreArm = [
-    { geo: cap(0.046, 0.19), color: U.jacket, matrix: M4(0, -0.13, 0) },
-    { geo: geo.cyl(0.05, 0.05, 0.03, 10), color: U.jacket, matrix: M4(0, -0.24, 0) },                             // Ärmelaufschlag
-    { geo: cap(0.035, 0.05, 1.1, 0.75), color: U.skin, matrix: M4(0, -0.29, -0.005) },                            // Hand
+    { geo: lathe([[0.047, 0.02], [0.048, -0.05], [0.042, -0.15], [0.04, -0.23]]), color: U.jacket, matrix: M4(0, 0, 0) },
+    { geo: geo.cyl(0.046, 0.046, 0.025, 12), color: U.jacket, matrix: M4(0, -0.235, 0) },
+    { geo: cap(0.03, 0.05, 1.25, 0.65), color: U.skin, matrix: M4(0, -0.285, -0.005) },                           // Hand
+    { geo: cap(0.011, 0.03), color: U.skin, matrix: M4(0.028, -0.27, -0.018, 0, -0.5, 0.4) },                    // Daumen
   ];
-  const thigh = [{ geo: cap(0.078, 0.3), color: U.pants, matrix: M4(0, -0.22, 0) }];
+  const thigh = [{ geo: lathe([[0.088, 0.03], [0.086, -0.06], [0.078, -0.2], [0.066, -0.36], [0.06, -0.45]], 1, 0.95), color: U.pants, matrix: M4(0, 0, 0) }];
   if (U.net || U.fj) thigh.push({ geo: geo.box(0.05, 0.13, 0.11), color: U.pants, matrix: M4(0.075, -0.22, -0.01) });   // Beintasche (Fallschirmjäger)
-  const shin = [{ geo: cap(0.062, 0.28), color: U.legs, matrix: M4(0, -0.2, 0) }];
+  const shin = [{ geo: lathe([[0.058, 0.03], [0.062, -0.06], [0.064, -0.12], [0.054, -0.24], [0.048, -0.36]], 1, 0.95), color: U.legs, matrix: M4(0, 0, 0) }];
   if (U.stiefel) shin.push({ geo: geo.cyl(0.072, 0.066, 0.3, 10), color: 0x1a1918, matrix: M4(0, -0.27, 0) });   // Marschstiefel
   else shin.push({ geo: geo.cyl(0.07, 0.068, 0.17, 10), color: U.legs === U.pants ? U.boots : 0xa69a74, matrix: M4(0, -0.33, 0) });   // Gamaschen / Springerstiefel
   shin.push({ geo: geo.box(0.11, 0.07, 0.2), color: U.boots, matrix: M4(0, -0.43, -0.035) });
   shin.push({ geo: geo.sph(0.056, 8, 6), color: U.boots, matrix: M4s(0, -0.43, -0.13, 0, 1, 0.65, 1) });         // Stiefelspitze
   const parts = {};
+  // Stoffmuster nur auf Stoff: Haut, Helm, Stiefel und Metall bleiben glatt; Stoff kachelt etwa alle 12 cm
+  const smooth = new Set([U.skin, U.helmet, U.boots, 0x2a2a2a, 0x2a2018, 0x5a3a2a, 0x7a4a3a, U.hair || 0x3a2a1c]);
+  for (const v of Object.values({ torso, head, upperArm, foreArm, thigh, shin })) for (const q of v) { if (smooth.has(q.color)) q.nouv = true; else q.uvScale = q.uvScale || 3; }
   for (const [k, v] of Object.entries({ torso, head, upperArm, foreArm, thigh, shin })) parts[k] = mergeColored(v);
   // Fernansicht: eine einzige Figur
   const far = [];
@@ -157,12 +201,35 @@ export function weaponMeshSimple(id) {
   return m;
 }
 
+// Arm (Schulter g, Ellbogen el; hängt entlang -y, Oberarm 0,30 m, Unterarm bis Hand 0,29 m) so beugen und drehen,
+// dass die Hand den Zielpunkt (im Koordinatensystem der Zielgruppe) erreicht; Ellbogen zeigt nach unten außen
+const _ta = new THREE.Vector3(), _tb = new THREE.Vector3(), _te = new THREE.Vector3(), _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+function reachArm(arm, t) {
+  const a = 0.3, b = 0.29, S = arm.g.position;
+  _ta.set(t[0] - S.x, t[1] - S.y, t[2] - S.z);
+  const d = Math.min(a + b - 0.005, Math.max(0.12, _ta.length()));
+  const beta = Math.acos(Math.max(-1, Math.min(1, (d * d - a * a - b * b) / (2 * a * b))));
+  arm.el.rotation.set(beta, 0, 0);
+  _tb.set(0, -a - b * Math.cos(beta), -b * Math.sin(beta)).normalize();
+  _ta.normalize();
+  _q1.setFromUnitVectors(_tb, _ta);
+  let best = 0, by = 1e9;
+  for (let k = -12; k <= 12; k++) {
+    const ang = k * 0.25;
+    _q2.setFromAxisAngle(_ta, ang).multiply(_q1);
+    _te.set(0, -a, 0).applyQuaternion(_q2);
+    const score = _te.y - Math.sign(S.x || 1) * _te.x * 0.5;
+    if (score < by) { by = score; best = ang; }
+  }
+  arm.g.quaternion.copy(_q2.setFromAxisAngle(_ta, best).multiply(_q1));
+}
+
 // Gelenkfigur: root (Füße am Boden) > hips > torso > head; Arme hängen an der Waffe (Zielhaltung)
 export class SoldierRig {
   constructor(uniKey, weaponId, opts = {}) {
     initMaterials();
     const P = soldierParts(UNIFORMS[uniKey] || UNIFORMS.us_inf);
-    const mat = MAT.vc;
+    const mat = MAT.soldier;
     const mk = (g) => { const m = new THREE.Mesh(g, mat); m.castShadow = !!opts.shadow; return m; };
     this.root = new THREE.Group();
     this.body = new THREE.Group(); this.root.add(this.body);      // für Liegen/Fallen
@@ -210,9 +277,11 @@ export class SoldierRig {
     this.aim.add(w);
     // Arme zur Waffe ausrichten: rechte Hand am Griff, linke vorn
     const pistol = WEAPONS[id] && WEAPONS[id].pistol;
-    // Oberarme nach vorn zur Waffe (positive X-Drehung), Unterarme angewinkelt, Hände zur Mitte
-    this.armR.g.rotation.set(1.15, 0, -0.12); this.armR.el.rotation.set(0.55, 0, 0);
-    this.armL.g.rotation.set(pistol ? 1.35 : 1.25, 0, pistol ? 0.45 : 0.35); this.armL.el.rotation.set(pistol ? 0.25 : 0.45, 0, 0);
+    // Hände an die Waffe: rechte Hand am Griff, linke am Handschutz (zweigliedrige Armkette, analytisch gelöst)
+    const tR = pistol ? [0.1, -0.06, -0.3] : sh ? [0.12, -0.12, 0.05] : [0.12, -0.12, 0.06];
+    const tL = pistol ? [0.07, -0.08, -0.28] : sh ? [0.12, -0.1, -0.35] : [0.1, -0.08, -0.34];
+    reachArm(this.armR, tR); reachArm(this.armL, tL);
+    this.armR.rest = this.armL.rest = null;
   }
 
   // Pose: speed (m/s), stance 0 stehen,1 hocken,2 liegen, pitch (Zielen), dt, dead (0..1 Fallfortschritt)

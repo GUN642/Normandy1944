@@ -2,6 +2,7 @@
 // Einheiten: Mündungsgeschwindigkeit m/s, Kadenz Schuss/min, Schaden ≈ Trefferpunkte (Mensch = 100),
 // spread = Streuung in mrad (Hüfte / Kimme), recoil = Hochschlag in rad.
 import * as THREE from './lib/three.module.min.js';
+import { tex, normalTex } from './gfx.js';
 
 export const WEAPONS = {
   // ---------------------------------------------------------------- USA
@@ -58,7 +59,27 @@ function mats() {
   M.sling = new THREE.MeshStandardMaterial({ color: 0x5a5236, roughness: 0.9 });
   M.leather = new THREE.MeshStandardMaterial({ color: 0x3d2a1a, roughness: 0.8 });
   M.glass = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.05, metalness: 0.5, emissive: 0x05080c });
+  // Oberflächen: Holz mit Maserung und Relief, Metall mit Kratzern und blank gegriffenen Stellen (glänzt im Umgebungslicht)
+  for (const k of ['wood', 'woodDark', 'woodLight']) { M[k].map = tex('grain'); M[k].normalMap = normalTex('grain', 1.2); M[k].roughness = 0.55; }
+  for (const k of ['steel', 'parker', 'blued', 'olive', 'field']) { M[k].roughnessMap = tex('scratch'); M[k].normalMap = normalTex('scratch', 0.6); M[k].roughness = k === 'blued' || k === 'steel' ? 0.75 : 0.95; M[k].metalness = k === 'olive' || k === 'field' ? 0.2 : 0.75; }
+  M.bakelite.normalMap = normalTex('scratch', 0.3); M.bakelite.roughness = 0.45;
+  M.sling.map = tex('fabric'); M.sling.normalMap = normalTex('fabric', 1.5);
+  M.leather.normalMap = normalTex('fabric', 0.8);
   return M;
+}
+
+// Texturkoordinaten als Würfelprojektion in Metern (Maserung läuft entlang der Waffe, gleich dicht auf allen Teilen)
+function boxProjectUV(geo, k = 4) {
+  const P = geo.attributes.position, N = geo.attributes.normal;
+  if (!P || !N) return;
+  const uv = new Float32Array(P.count * 2);
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i), ax = Math.abs(N.getX(i)), ay = Math.abs(N.getY(i)), az = Math.abs(N.getZ(i));
+    let u, v;
+    if (ax >= ay && ax >= az) { u = z; v = y; } else if (ay >= az) { u = z; v = x; } else { u = x; v = y; }
+    uv[i * 2] = u * k; uv[i * 2 + 1] = v * k;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
 // Seitenprofil (x vorwärts, y hoch, in cm) extrudieren; Dicke in cm, zentriert
@@ -437,7 +458,13 @@ function addSights(g, S) {
 const cache = new Map();
 // Modell (geteilte Geometrie, Klon je Verwendung)
 export function weaponModel(id) {
-  if (!cache.has(id)) { const g = (BUILD[id] || BUILD.garand)(); if (SIGHTS[id]) addSights(g, SIGHTS[id]); cache.set(id, g); }
+  if (!cache.has(id)) {
+    const g = (BUILD[id] || BUILD.garand)(); if (SIGHTS[id]) addSights(g, SIGHTS[id]);
+    g.updateMatrixWorld(true);
+    const done = new Set();
+    g.traverse((o) => { if (o.isMesh && !done.has(o.geometry)) { done.add(o.geometry); const geo = o.geometry; geo.applyMatrix4(o.matrixWorld); boxProjectUV(geo, 3.5); geo.applyMatrix4(new THREE.Matrix4().copy(o.matrixWorld).invert()); } });
+    cache.set(id, g);
+  }
   const src = cache.get(id);
   const c = src.clone(true);
   c.userData = { ...src.userData };

@@ -1,6 +1,6 @@
 // Normandy 1944 – Hauptprogramm: Spielschleife, Menüs, Kampagne, freies Gefecht, Mehrspieler
 import * as THREE from './lib/three.module.min.js';
-import { qualityConfig, makeSky } from './gfx.js';
+import { qualityConfig, makeSky, skyEnvironment } from './gfx.js';
 import { World } from './world.js';
 import { MAPS, MAP_NAMES } from './maps.js';
 import { Effects } from './effects.js';
@@ -19,7 +19,7 @@ import { Crew } from './vehicle.js';
 import { Voice } from './voice.js';
 import { OPERATIONS, CAMPAIGN, EPILOGUE, opById, SIDES } from './story.js';
 import { WEAPONS, CLASSES, PLAYER_CLASSES } from './weapons.js';
-import { SoldierRig, buildPlane, buildChute } from './models.js';
+import { SoldierRig, buildPlane, buildChute, setPBR } from './models.js';
 import { uniformFor } from './units.js';
 import { T, L, setLang, getLang } from './i18n.js';
 import { loadSettings, saveSettings, loadStats, saveStats, loadCampaign, saveCampaign, rankFor, isMobile, isApp, fetchVersion, appVersion, appCheckUpdate, enterFullscreen, QUALITY } from './platform.js';
@@ -178,6 +178,8 @@ class Game {
     this.cleanup();
     this.smokes = [];
     this.q = qualityConfig(this.settings);
+    setPBR(!['minimal', 'low'].includes(this.q.name));
+    this.envT = 0;
     if (this.renderer.shadowMap.enabled !== this.q.shadows > 0 || (this.sun.castShadow && this.sun.shadow.mapSize.x !== this.q.shadowMap)) this.initRenderer();
     this.resize();
     this.op = opById(opId);
@@ -863,6 +865,15 @@ class Game {
     const r = this.renderer, cam = this.camera, p = this.player;
     if (this.state === 'playing' || this.state === 'paused' || this.state === 'result') {
       if (p.tank && p.alive) this.crew.view(dt); else p.updateView(dt);
+      // Umgebungslicht aus dem Himmel (ab „Mittel“), alle 30 s neu (Tageszeit, Wetter)
+      if (!['minimal', 'low'].includes(this.q.name) && this.time >= (this.envT || 0) && this.atmo) {
+        this.envT = this.time + 30;
+        try {
+          this.envRT = skyEnvironment(this.renderer, this.sky, this.envRT);
+          this.scene.environment = this.envRT.texture; this.scene.environmentIntensity = 0.45;
+          p.vm.scene.environment = this.envRT.texture; p.vm.scene.environmentIntensity = 0.7;
+        } catch (e) { console.warn('Umgebung', e); this.envT = 1e9; }
+      } else if (['minimal', 'low'].includes(this.q.name) && this.scene.environment) { this.scene.environment = null; p.vm.scene.environment = null; }
       // Tot: Kamera kippt
       if (!p.alive) { cam.position.y = p.pos.y + 0.3; cam.rotation.z = 0.6; }
       // Schulterkamera

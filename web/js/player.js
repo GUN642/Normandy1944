@@ -4,6 +4,7 @@ import { WEAPONS, CLASSES, loadout, weaponModel } from './weapons.js';
 import { clamp, wrapAngle, rand } from './util.js';
 import { T } from './i18n.js';
 import { buildChute } from './models.js';
+import { tex, normalTex } from './gfx.js';
 
 const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -22,8 +23,9 @@ class ViewModel {
     this.cam.add(this.holder);
     this.model = null;
     this.t = 0; this.kick = 0; this.swap = 0;
-    this.sleeve = new THREE.MeshLambertMaterial({ color: 0x7d7652 });
-    this.skin = new THREE.MeshLambertMaterial({ color: 0xc49a7c });
+    // Ärmel aus Uniformstoff (Köper mit Relief), Hand mit Hauttextur
+    this.sleeve = new THREE.MeshStandardMaterial({ color: 0x7d7652, map: tex('fabric'), normalMap: normalTex('fabric', 1.6), roughness: 0.95 });
+    this.skin = new THREE.MeshStandardMaterial({ color: 0xc49a7c, map: tex('skin'), roughness: 0.65 });
   }
   set(id, team) {
     if (this.model) this.holder.remove(this.model);
@@ -35,9 +37,16 @@ class ViewModel {
     // Hände/Unterarme
     const arm = (x, y, z, rx, rz, len = 0.32) => {
       const g = new THREE.Group();
-      const s = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, len), this.sleeve); s.position.z = len / 2;
-      const h = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.09), this.skin);
-      g.add(s, h); g.position.set(x, y, z); g.rotation.set(rx, 0, rz);
+      // Ärmel: runder, zur Manschette leicht verjüngt, mit Ärmelaufschlag; Hand: Handballen, gekrümmte Finger, Daumen
+      const sg = new THREE.CylinderGeometry(0.036, 0.044, len, 12); sg.rotateX(Math.PI / 2);
+      const s = new THREE.Mesh(sg, this.sleeve); s.position.z = len / 2;
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 6, 14), this.sleeve); cuff.position.z = 0.01;
+      const h = new THREE.Group();
+      const palm = new THREE.Mesh(new THREE.CapsuleGeometry(0.026, 0.04, 4, 10), this.skin); palm.rotation.x = Math.PI / 2; palm.scale.set(1.15, 1, 0.75);
+      const fing = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.035, 4, 8), this.skin); fing.rotation.x = Math.PI / 2 + 0.6; fing.position.set(0, -0.018, -0.045); fing.scale.set(1.5, 1, 0.8);
+      const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.011, 0.03, 4, 8), this.skin); thumb.rotation.set(Math.PI / 2, 0, 0.7); thumb.position.set(0.026, 0.008, -0.03);
+      h.add(palm, fing, thumb);
+      g.add(s, cuff, h); g.position.set(x, y, z); g.rotation.set(rx, 0, rz);
       m.add(g); this.arms.push(g);
     };
     const W = this.W;
