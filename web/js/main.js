@@ -620,13 +620,18 @@ class Game {
     if (p.dragging && (!p.dragging.downed || p.dragging.pos.distanceTo(p.pos) > 4.5)) p.dragging = null;
     // Mitspieler (Client): der Host bewegt den Verwundeten
     if (before !== p.dragging && this.net && !this.net.isHost) this.net.send({ t: 'drg', u: p.dragging ? p.dragging.uid : 0 });
-    const act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || med || this.ammoAction(p));
+    let act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || med || this.ammoAction(p));
+    // sich selbst verbinden: R (Controller) bzw. E halten, wenn sonst nichts zu tun ist – Steuerkreuz/H gehen weiterhin
+    if (!act && p.alive && !p.downed && !p.dragging && p.hp < 90 && p.bandages > 0 && p.healing <= 0 && !p.inBoat && !p.chute && !(p.nearRope && p.nearRope())) {
+      act = { kind: 'self', time: 1, text: pad ? T(`R halten: selbst verbinden (${p.bandages})`, `Hold R: bandage yourself (${p.bandages})`) : T(`E halten oder H: selbst verbinden (${p.bandages})`, `Hold E or H: bandage yourself (${p.bandages})`) };
+    }
     this.interactHint = act;
     if (act && inp.held('use')) {
       this.holdE += dt;
       if (this.holdE >= act.time) {
         this.holdE = 0;
-        if (act.kind === 'ammo') this.takeAmmo(act);
+        if (act.kind === 'self') { p.bandages--; p.healing = 3; this.hud.toast(T('Verband angelegt', 'Bandage applied')); this.audio.play('mag', null, 0.4); }
+        else if (act.kind === 'ammo') this.takeAmmo(act);
         else if (act.kind === 'revive') {
           if (p.dragging === act.u) p.dragging = null;
           if (!this.net || this.net.isHost) this.units.revive(act.u, 55); else this.net.send({ t: 'rev', u: act.u.uid });

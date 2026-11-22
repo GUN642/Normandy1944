@@ -41,7 +41,7 @@ Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbo
 - **Markierungen:** blaues Dreieck über Kameraden, rotes über sichtbaren Feinden, gelbes mit Kreuz über Verwundeten – feste Bildschirmgröße, auch auf dem Fernseher gut sichtbar (abschaltbar).
 - **Verwundete:** Wer nicht in den Kopf oder durch eine Explosion getroffen wird, ist oft nur kampfunfähig, blutet und
   stirbt ohne Hilfe nach rund einer Minute. E halten: verarzten · H: in Deckung ziehen · leicht Verletzte verbinden
-  (Controller: R halten = verarzten, Y oder Steuerkreuz runter = ziehen/loslassen).
+  (Controller: R halten = verarzten bzw. selbst verbinden, Y oder Steuerkreuz runter = ziehen/loslassen).
   KI-Kameraden verarzten sich gegenseitig und kommen auch zum Spieler; im Mehrspieler können sich Spieler gegenseitig retten und Verwundete ziehen.
   Blut an der Einschussstelle, Blutlache, Verband nach dem Verarzten.
 - **Zielhilfe** für Touch und Controller wie im Medevac-sim; Controller inkl. Switch Pro/Joy-Con und Android TV.

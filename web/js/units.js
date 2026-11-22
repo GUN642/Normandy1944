@@ -897,7 +897,7 @@ export class Units {
     u.marker.position.set(u.pos.x, u.pos.y + (u.downed ? 0.7 : u.stance === 2 ? 0.9 : u.stance === 1 ? 1.7 : 2.2), u.pos.z);
     // Größe in Bildschirmanteilen; auf großen Bildschirmen (Fernseher) etwas größer, nah etwas kleiner
     // feste Bildschirmgröße in Pixeln (unabhängig von Auflösung/Grafikstufe): ~27 px Handy, ~35 px Full-HD-Fernseher
-    const px = (22 + innerHeight * 0.012) * (g.settings.markerSize || 1) * (d < 15 ? 0.8 : 1);
+    const px = (11 + innerHeight * 0.006) * (g.settings.markerSize || 1) * (d < 15 ? 0.8 : 1);   // ~14 px Handy, ~17 px Full-HD
     const sc = (px * 2) / innerHeight;
     u.marker.scale.set(sc, sc, 1);
   }

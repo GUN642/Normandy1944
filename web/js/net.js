@@ -303,7 +303,7 @@ export class Avatar {
     if (this.team !== this.g.player.team && this.alive && this.g.settings.markers !== false) {
       if (!this.dotT || this.g.time > this.dotT) { this.dotT = this.g.time + 0.4; const c = this.chest(new THREE.Vector3()); this.dotVis = this.g.world.los(this.g.camera.position, c) && !this.g.smokeBlocks(this.g.camera.position, c); }
       this.dot.visible = !!this.dotVis || (this.lastShot && this.g.time - this.lastShot < 3);
-      const sc = ((22 + innerHeight * 0.012) * 2) / innerHeight; this.dot.scale.set(sc, sc, 1);
+      const sc = ((11 + innerHeight * 0.006) * 2) / innerHeight; this.dot.scale.set(sc, sc, 1);
     } else this.dot.visible = false;
     if (this.alive) { r.setLod(0); r.pose(this.speed, this.stance, this.pitch, dt); }
     else { this.deadT = (this.deadT || 0) + dt; r.pose(0, 0, 0, dt, Math.min(1, this.deadT * 2)); }
