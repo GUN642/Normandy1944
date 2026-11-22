@@ -128,6 +128,7 @@ export class Player {
 
   spawnAt(p, yaw = 0) {
     this.pos.copy(p);
+    this.g.world.pushOut(this.pos);
     this.pos.y = this.g.world.groundAt(p.x, p.z, p.y + 2);
     this.yaw = yaw; this.pitch = 0;
     this.vel.set(0, 0, 0);

@@ -87,8 +87,8 @@ export class Combat {
     // KI-Geschosse treffen keine eigenen Kameraden (die KI achtet auf ihre Schusslinie)
     const aiShot = owner && (owner.uid || owner.tank);
     for (const u of g.units.list) if (u.alive && (!owner || u.uid !== owner.uid) && !(aiShot && u.team === owner.team)) test(u, 'unit');
-    if (g.player.alive && !(owner && owner.local)) test(g.player, 'player');
-    for (const [pid, av] of g.avatars) if (av.alive && av.visible && (!owner || owner.pid !== pid)) test(av, 'avatar');
+    if (g.player.alive && !g.player.tank && !(owner && owner.local)) test(g.player, 'player');
+    for (const [pid, av] of g.avatars) if (av.alive && av.visible && !av.inTank && (!owner || owner.pid !== pid)) test(av, 'avatar');
     for (const tk of g.units.tanks) {
       if (!tk.alive) continue;
       _a.set(a.x, a.y, a.z);
@@ -136,8 +136,8 @@ export class Combat {
       else if (kind === 'avatar') g.netHitAvatar(ent, dmg * f, owner, _d, false);
     };
     for (const u of g.units.list) if (u.alive) hurt(u, 'unit');
-    if (g.player.alive) hurt(g.player, 'player');
-    for (const av of g.avatars.values()) if (av.alive && av.visible) hurt(av, 'avatar');
+    if (g.player.alive && !g.player.tank) hurt(g.player, 'player');
+    for (const av of g.avatars.values()) if (av.alive && av.visible && !av.inTank) hurt(av, 'avatar');
     for (const tk of g.units.tanks) if (tk.alive) { const dd = tk.pos.distanceTo(p); if (dd < radius + 3) tk.damage(dmg * (size >= 2 ? 1 : 0.15) * clamp(1 - dd / (radius + 3), 0, 1), owner); }
     g.missions.explosionAt(p, dmg, radius, owner);
   }

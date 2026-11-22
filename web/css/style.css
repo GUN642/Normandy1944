@@ -250,3 +250,7 @@ body.touchmode #feed { top: 136px; }
 #errline { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 90vw; font: 11px var(--type); color: #ffb0a0; background: rgba(40, 0, 0, 0.7); padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 12; }
 #mp-lan { max-width: 900px; margin: 4px 0 10px; padding: 8px 10px; border: 1px solid var(--line); background: rgba(40, 50, 30, 0.35); }
 #mp-lanlist button { font-size: 15px; }
+/* Panzer-Zielfernrohr: Winkelmarken mit Mittelspitze */
+#scope[data-kind=tank] { background: radial-gradient(circle at center, transparent 0, transparent calc(min(44vh, 44vw)), #000 calc(min(44vh, 44vw) + 2px)); }
+#scope[data-kind=tank] .lens::before { left: -30vh; width: 60vh; height: 2px; top: 4vh; background: linear-gradient(90deg, #111 0 40%, transparent 40% 60%, #111 60% 100%); }
+#scope[data-kind=tank] .lens::after { left: -1px; top: 0; width: 0; height: 0; border-left: 1.6vh solid transparent; border-right: 1.6vh solid transparent; border-bottom: 3.2vh solid #111; transform: translateX(-1.6vh); background: none; }

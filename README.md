@@ -44,6 +44,13 @@ Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbo
   (Controller: R halten = verarzten bzw. selbst verbinden, Y oder Steuerkreuz runter = ziehen/loslassen).
   KI-Kameraden verarzten sich gegenseitig und kommen auch zum Spieler; im Mehrspieler können sich Spieler gegenseitig retten und Verwundete ziehen.
   Blut an der Einschussstelle, Blutlache, Verband nach dem Verarzten.
+- **Panzer besetzen:** Am eigenen Panzer E (Controller: R) halten. Erster Platz Fahrer und Richtschütze (fahren, Turm mit
+  der Maus/rechtem Stick, Kanone mit Nachladezeit, Zielfernrohr), zweiter Platz MG-Schütze – im Mehrspieler fährt einer,
+  der andere bedient das MG. Hecken, Mauern und Häuser halten auch Panzer auf; wird der Panzer abgeschossen, ist die Besatzung schwer verwundet.
+- **Häuser und Kirchen begehbar:** Tür, offene Fenster zum Hinausschießen, Treppe ins Obergeschoss; im Kirchturm führt
+  eine Wendeltreppe bis zur Glockenstube (Scharfschützenposten mit Schallöffnungen in alle Richtungen).
+- **Realistisches Fallen:** Getroffene knicken in den Knien ein und kippen je nach Trefferrichtung nach vorn, hinten oder
+  zur Seite, Kopftreffer sacken sofort zusammen, Explosionen schleudern weg.
 - **Zielhilfe** für Touch und Controller wie im Medevac-sim; Controller inkl. Switch Pro/Joy-Con und Android TV.
 
 ## Waffen (historische Kenndaten, detaillierte 3D-Modelle)

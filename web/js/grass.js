@@ -43,6 +43,7 @@ export class Grass {
       if (W.water && h < 0.4) d = 0;
       if (W.def.beach && z < -100 && h < 3.4) d = 0;
       if (W.nearRoad(x, z, 0.8)) d = 0;
+      if (W.footprintAt && W.footprintAt(x, z, 0.8)) d = 0;   // kein Gras durch Hausböden
       for (const t of W.towns) if (t.square && Math.abs(x - t.square.x) < t.square.w / 2 && Math.abs(z - t.square.z) < t.square.d / 2) d = 0;
       const nrm = W.normal(x, z);
       if (nrm.y < 0.7) d *= 0.3;

@@ -69,8 +69,12 @@ export class Hud {
     el.stance.textContent = p.chute ? '🪂' : p.climbing ? '🧗' : ['▮', '▄', '▁'][p.stance];
     // Waffe
     const W = p.W, A = p.ammo[p.wid];
-    el['w-name'].textContent = W.name + (W.cal ? ' · ' + W.cal : '');
-    el['w-ammo'].innerHTML = W.grenade ? `${A.res}` : `<b>${A.mag}</b> / ${A.res}` + (p.reloading > 0 ? ` <i>${T('lädt', 'reloading')}</i>` : '');
+    const tk = p.tank && g.crew ? g.crew.hudText() : null;
+    if (tk) { el['w-name'].textContent = tk.name; el['w-ammo'].innerHTML = tk.ammo; }
+    else {
+      el['w-name'].textContent = W.name + (W.cal ? ' · ' + W.cal : '');
+      el['w-ammo'].innerHTML = W.grenade ? `${A.res}` : `<b>${A.mag}</b> / ${A.res}` + (p.reloading > 0 ? ` <i>${T('lädt', 'reloading')}</i>` : '');
+    }
     const nid = p.weapons.find((w) => WEAPONS[w].grenade);
     el['w-nade'].textContent = nid ? '◉ ' + p.ammo[nid].res : '';
     el['w-band'].textContent = '✚ ' + p.bandages;
@@ -97,11 +101,12 @@ export class Hud {
     // Fadenkreuz: nur ohne Zielen, Größe nach Streuung
     const spread = (W.spread ? W.spread[0] : 20) * (1 + Math.min(1, p.speed / 3.5) * 1.5) * (p.stance === 2 ? 0.55 : p.stance === 1 ? 0.75 : 1);
     el.xhair.style.setProperty('--s', Math.round(8 + spread * 0.5) + 'px');
-    el.xhair.style.opacity = p.ads > 0.4 || p.sprinting || !p.alive || g.thirdPerson ? 0 : 0.85;
+    el.xhair.style.opacity = p.tank ? (p.ads > 0.6 && p.seat === 0 ? 0 : 0.9) : p.ads > 0.4 || p.sprinting || !p.alive || g.thirdPerson ? 0 : 0.85;
     // Zielfernrohr
-    const sc = W.scope && p.ads > 0.92;
+    const tsight = p.tank && p.seat === 0 && p.ads > 0.6;
+    const sc = (W.scope && p.ads > 0.92 && !p.tank) || tsight;
     el.scope.classList.toggle('on', !!sc);
-    el.scope.dataset.kind = W.scope || '';
+    el.scope.dataset.kind = tsight ? 'tank' : W.scope || '';
     // Unterdrückung / Verletzung: Vignette
     const vig = Math.max(p.suppress * 0.75, p.hp < 40 ? (40 - p.hp) / 50 : 0);
     el.vig.style.opacity = vig.toFixed(2);

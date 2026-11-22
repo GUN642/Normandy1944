@@ -4,7 +4,7 @@
 // Ablauf: Der Host rechnet KI, Missionen und Artillerie. Jeder Spieler rechnet seine eigene Bewegung und seine Schüsse;
 // Treffer auf KI meldet der Schütze dem Host, Treffer auf Spieler leitet der Host an das Opfer weiter.
 import * as THREE from './lib/three.module.min.js';
-import { SoldierRig } from './models.js';
+import { SoldierRig, fallParams } from './models.js';
 import { WEAPONS } from './weapons.js';
 import { uniformFor, WIDS, lerpAngle, markMat } from './units.js';
 import { T } from './i18n.js';
@@ -285,12 +285,14 @@ export class Avatar {
     if (wid && wid !== this.wid) { this.wid = wid; this.rig.setWeapon(wid); }
     const alive = !!s[7];
     this.downed = !!s[10];
-    if (this.alive && !alive) this.deadT = 0;
+    this.inTank = !!s[11];
+    if (this.alive && !alive) { this.deadT = 0; this.fallP = null; }
+    if (!this.alive && alive && this.fallP) { this.fallP = null; this.rig.resetPose(); }
     this.alive = alive; this.visible = true;
   }
   update(dt) {
     const r = this.rig;
-    r.root.visible = this.visible;
+    r.root.visible = this.visible && !this.inTank;
     if (!this.visible) return;
     const old = this.pos.clone();
     this.pos.lerp(this.tgt, Math.min(1, dt * 12));
@@ -306,7 +308,7 @@ export class Avatar {
       const sc = ((11 + innerHeight * 0.006) * 2) / innerHeight; this.dot.scale.set(sc, sc, 1);
     } else this.dot.visible = false;
     if (this.alive) { r.setLod(0); r.pose(this.speed, this.stance, this.pitch, dt); }
-    else { this.deadT = (this.deadT || 0) + dt; r.pose(0, 0, 0, dt, Math.min(1, this.deadT * 2)); }
+    else { this.deadT = (this.deadT || 0) + dt; if (!this.fallP) this.fallP = fallParams(this.yaw, null, false, false); if (this.deadT < 3) r.fall(this.deadT, this.fallP); }
   }
   dispose() { this.rig.dispose(); }
 }
@@ -339,7 +341,7 @@ export class Net {
   // ------------------------------------------------------------ Ereignisse (vom Spiel aufgerufen)
   playerState() {
     const p = this.g.player;
-    return [r1(p.pos.x), r1(p.pos.y), r1(p.pos.z), r2(p.yaw), r2(p.pitch), p.stance, WIDS.indexOf(p.wid), p.alive ? 1 : 0, p.team === 'de' ? 1 : 0, p.chute ? 1 : 0, p.downed ? 1 : 0];
+    return [r1(p.pos.x), r1(p.pos.y), r1(p.pos.z), r2(p.yaw), r2(p.pitch), p.stance, WIDS.indexOf(p.wid), p.alive ? 1 : 0, p.team === 'de' ? 1 : 0, p.chute ? 1 : 0, p.downed ? 1 : 0, p.tank ? 1 : 0];
   }
   fire(o, d, wid, tracer) {
     const m = { t: 'ff', o: [r2(o.x), r2(o.y), r2(o.z)], d: [r4(d.x), r4(d.y), r4(d.z)], w: WIDS.indexOf(wid), tr: tracer ? 1 : 0, p: this.myId };
@@ -348,6 +350,11 @@ export class Net {
   nade(o, v, wid) { this.send({ t: 'nd', o: [r2(o.x), r2(o.y), r2(o.z)], v: [r2(v.x), r2(v.y), r2(v.z)], w: wid, p: this.myId, s: this.g.player.team }); }
   aiShot(o, d, wid, tracer, team) { if (this.players.size > 1) this.ev.push(r1(o.x), r1(o.y), r1(o.z), r4(d.x), r4(d.y), r4(d.z), WIDS.indexOf(wid), (tracer ? 1 : 0) | (team === 'de' ? 2 : 0)); }
   nadeThrown(o, v, kind) { this.send({ t: 'nd', o: [r2(o.x), r2(o.y), r2(o.z)], v: [r2(v.x), r2(v.y), r2(v.z)], w: kind, ai: 1 }); }
+  renderTankShot(m) {
+    const g = this.g, mz = new THREE.Vector3(...m.m), h = new THREE.Vector3(...m.h);
+    g.effects.muzzle(mz, h.clone().sub(mz).normalize(), true); g.audio.play('cannon', mz, 1, 1, { far: 1500 });
+    setTimeout(() => g.world && g.combat.explode(h, 160, 6, { team: 'none' }, false, 2), (mz.distanceTo(h) / 750) * 1000);
+  }
   tankShot(t, mz, hit) { this.send({ t: 'tsh', m: [r1(mz.x), r1(mz.y), r1(mz.z)], h: [r1(hit.x), r1(hit.y), r1(hit.z)] }); }
   unitKilled() {}
   tankKilled() {}
@@ -431,6 +438,7 @@ export class Net {
       case 'ptt': g.comms.onHostPtt(p, !!m.on); break;
       case '_leave': {
         g.comms.dropPlayer(p);
+        for (const t of g.units.tanks) if (t.crew) { if (t.crew[0] === p) t.crew[0] = null; if (t.crew[1] === p) t.crew[1] = null; }
         const pl = this.players.get(p);
         this.players.delete(p);
         this.dropAvatar(p);
@@ -460,6 +468,21 @@ export class Net {
         break;
       }
       case 'rev': { const u = g.units.byId.get(m.u); if (u && u.downed) g.units.revive(u, 55); break; }
+      // Panzer: Platz nehmen/verlassen, Fahrdaten, Kanonenschuss, Treffer eines Mitspielers
+      case 'tk': {
+        const t = g.units.tanks.find((q) => q.id === m.id); if (!t || !t.alive) break;
+        const c = g.crew.crewOf(t);
+        if (m.s >= 0) { if (c[m.s] === null || c[m.s] === p) { if (c[0] === p) c[0] = null; if (c[1] === p) c[1] = null; c[m.s] = p; } }
+        else if (c[m.o] === p) c[m.o] = null;
+        break;
+      }
+      case 'tdr': {
+        const t = g.units.tanks.find((q) => q.id === m.id);
+        if (t && t.alive && t.crew && t.crew[0] === p) { t.pos.x = m.x; t.pos.z = m.z; t.yaw = m.y; t.turretYaw = m.ty; t.gunEl = m.el; t.moving = true; t.m.turret.rotation.y = t.spec.casemate ? 0 : m.ty; t.m.gun.rotation.x = m.el; }
+        break;
+      }
+      case 'tsh': { this.renderTankShot(m); this.relay(p, m); break; }
+      case 'tdm': { const t = g.units.tanks.find((q) => q.id === m.id); const pl = this.players.get(p); if (t && t.alive) t.damage(Math.min(800, m.d), { team: pl ? pl.side : 'us', pid: p }, !!m.r); break; }
       case 'drg': { const av = g.avatars.get(p); if (av) { const u = m.u ? g.units.byId.get(m.u) : null; av.dragging = u && u.downed ? u : null; } break; }
       case 'rvp': {
         // ein Spieler verarztet einen anderen Spieler
@@ -502,7 +525,7 @@ export class Net {
       case 'sh': g.combat.shell(new THREE.Vector3(m.p[0], 0, m.p[1]), m.s, m.d, { team: 'none' }, false); break;
       case 'air': g.atmo.airVisual(m.p, m.d); break;
       case 'smk': for (let i = 0; i < 5; i++) setTimeout(() => g.world && g.effects.smokeGrenade(m.p[0] + (Math.random() - 0.5) * 40, g.world.h(m.p[0], m.p[1]), m.p[1] + (Math.random() - 0.5) * 40), 6000 + i * 500); break;
-      case 'tsh': { const mz = new THREE.Vector3(...m.m), h = new THREE.Vector3(...m.h); g.effects.muzzle(mz, h.clone().sub(mz).normalize(), true); g.audio.play('cannon', mz, 1, 1, { far: 1500 }); setTimeout(() => g.world && g.combat.explode(h, 160, 6, { team: 'none' }, false, 2), (mz.distanceTo(h) / 750) * 1000); break; }
+      case 'tsh': this.renderTankShot(m); break;
       case 'chg': { const tg = g.world.targets[m.id]; if (tg) { tg.charging = false; g.missions.placeCharge(tg, g.player.team === 'us' ? 'none' : 'none', false); } break; }
       case 'tgd': { const tg = g.world.targets[m.id]; if (tg && !tg.destroyed) { if (tg.kind === 'flag') g.missions.raiseFlag(tg); else g.missions.destroyTarget(tg, 'none'); } break; }
       case 'pdmg': g.applyNetDamage(m); break;

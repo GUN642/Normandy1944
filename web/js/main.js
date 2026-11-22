@@ -15,6 +15,7 @@ import { Hud } from './hud.js';
 import { Input, BIND_DEFS, keyName, resolveBinds } from './input.js';
 import { Net, netTransport, isGameCode } from './net.js';
 import { Comms } from './comms.js';
+import { Crew } from './vehicle.js';
 import { Voice } from './voice.js';
 import { OPERATIONS, CAMPAIGN, EPILOGUE, opById, SIDES } from './story.js';
 import { WEAPONS, CLASSES, PLAYER_CLASSES } from './weapons.js';
@@ -90,6 +91,7 @@ class Game {
     this.state = 'menu';
     this.time = 0;
     this.avatars = new Map();
+    this.crew = new Crew(this);
     this.audio = new AudioSys();
     this.audio.setVolume(this.settings.volume);
     this.input = new Input(this.canvas, this.settings);
@@ -275,7 +277,7 @@ class Game {
     for (const a of this.avatars.values()) a.dispose();
     this.avatars.clear();
     if (this.player.chute) { this.scene.remove(this.player.chute); this.player.chute = null; }
-    this.player.inBoat = null;
+    this.player.inBoat = null; this.player.tank = null;
     this.world = null;
   }
 
@@ -444,6 +446,7 @@ class Game {
 
   playerDied(owner, cause) {
     const p = this.player;
+    if (p.tank) this.crew.exit(true);
     p.alive = false; p.hp = 0;
     this.stats.deaths++; this.session.deaths++;
     this.deadT = 0;
@@ -541,7 +544,11 @@ class Game {
     // Jedes Teilsystem einzeln abgesichert: ein Fehler darf nie den Rest des Spiels anhalten
     const run = (name, fn) => { try { fn(); } catch (e) { this.reportError(e, name); } };
     if (!blockInput) run('Tasten', () => this.handleKeys(inp));
-    if (p.alive) {
+    if (p.alive && p.tank) {
+      // im Panzer: fahren/richten/feuern statt laufen
+      run('Panzer', () => this.crew.update(dt, I));
+      this.interactHint = null; this.holdE = 0; this.medicContext = false;
+    } else if (p.alive) {
       if (I === inp) run('Zielhilfe', () => this.aimAssist(dt, inp));
       run('Spieler', () => p.update(dt, I));
       if (!this.radioOpen) run('Waffe', () => p.weaponUpdate(dt, I));
@@ -620,7 +627,7 @@ class Game {
     if (p.dragging && (!p.dragging.downed || p.dragging.pos.distanceTo(p.pos) > 4.5)) p.dragging = null;
     // Mitspieler (Client): der Host bewegt den Verwundeten
     if (before !== p.dragging && this.net && !this.net.isHost) this.net.send({ t: 'drg', u: p.dragging ? p.dragging.uid : 0 });
-    let act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || med || this.ammoAction(p));
+    let act = p.inBoat || p.chute ? null : (this.missions.interaction(p.pos, p.team) || med || this.crew.seatNear(p) || this.ammoAction(p));
     // sich selbst verbinden: R (Controller) bzw. E halten, wenn sonst nichts zu tun ist – Steuerkreuz/H gehen weiterhin
     if (!act && p.alive && !p.downed && !p.dragging && p.hp < 90 && p.bandages > 0 && p.healing <= 0 && !p.inBoat && !p.chute && !(p.nearRope && p.nearRope())) {
       act = { kind: 'self', time: 1, text: pad ? T(`R halten: selbst verbinden (${p.bandages})`, `Hold R: bandage yourself (${p.bandages})`) : T(`E halten oder H: selbst verbinden (${p.bandages})`, `Hold E or H: bandage yourself (${p.bandages})`) };
@@ -630,7 +637,8 @@ class Game {
       this.holdE += dt;
       if (this.holdE >= act.time) {
         this.holdE = 0;
-        if (act.kind === 'self') { p.bandages--; p.healing = 3; this.hud.toast(T('Verband angelegt', 'Bandage applied')); this.audio.play('mag', null, 0.4); }
+        if (act.kind === 'tank') this.crew.enter(act.t, act.seat);
+        else if (act.kind === 'self') { p.bandages--; p.healing = 3; this.hud.toast(T('Verband angelegt', 'Bandage applied')); this.audio.play('mag', null, 0.4); }
         else if (act.kind === 'ammo') this.takeAmmo(act);
         else if (act.kind === 'revive') {
           if (p.dragging === act.u) p.dragging = null;
@@ -833,12 +841,12 @@ class Game {
   render(dt) {
     const r = this.renderer, cam = this.camera, p = this.player;
     if (this.state === 'playing' || this.state === 'paused' || this.state === 'result') {
-      p.updateView(dt);
+      if (p.tank && p.alive) this.crew.view(dt); else p.updateView(dt);
       // Tot: Kamera kippt
       if (!p.alive) { cam.position.y = p.pos.y + 0.3; cam.rotation.z = 0.6; }
       // Schulterkamera
       if (this.playerRig) {
-        const tp = this.thirdPerson && p.alive && !p.inBoat;
+        const tp = this.thirdPerson && p.alive && !p.inBoat && !p.tank;
         this.playerRig.root.visible = tp;
         if (tp) {
           this.playerRig.root.position.copy(p.pos);
@@ -873,7 +881,7 @@ class Game {
     // Sichtweite: Nebel nimmt mit der Grafikstufe zu
     r.clear();
     r.render(this.scene, cam);
-    if (this.state !== 'result' && p.alive && !this.thirdPerson && !p.inBoat && !p.chute) {
+    if (this.state !== 'result' && p.alive && !this.thirdPerson && !p.inBoat && !p.chute && !p.tank) {
       r.clearDepth();
       const vm = p.vm;
       vm.hemi.intensity = this.hemi.intensity * 1.1; vm.hemi.color.copy(this.hemi.color);

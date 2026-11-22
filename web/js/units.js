@@ -1,7 +1,7 @@
 // KI-Soldaten, Trupps und Panzer.
 // Der Host (bzw. Einzelspieler) rechnet die KI; Mitspieler erhalten Schnappschüsse und zeigen nur Puppen an.
 import * as THREE from './lib/three.module.min.js';
-import { SoldierRig, buildTank, TANKS, buildChute, MAT } from './models.js';
+import { SoldierRig, buildTank, TANKS, buildChute, MAT, fallParams } from './models.js';
 import { WEAPONS, CLASSES } from './weapons.js';
 import { clamp, wrapAngle, rand, makeRng } from './util.js';
 import { T } from './i18n.js';
@@ -99,6 +99,11 @@ export class Tank {
   }
   damage(d, owner, direct = false) {
     if (!this.alive) return;
+    const net = this.sys.g.net;
+    if (net && !net.isHost) {   // Mitspieler: Treffer an den Host melden
+      if (owner && owner.local) { net.send({ t: 'tdm', id: this.id, d: Math.round(d), r: direct ? 1 : 0 }); this.sys.g.hud.hit(false, false); }
+      return;
+    }
     this.hp -= d;
     if (direct) this.sys.g.audio.play('boomSmall', this.pos, 0.8);
     if (this.hp <= 0) this.sys.destroyTank(this, owner);
@@ -127,6 +132,7 @@ export class Units {
   // ------------------------------------------------------------ Erzeugen
   spawn(team, role, pos, opts = {}) {
     const u = new Unit(this, team, role, pos, { uniform: uniformFor(this.g.op.id, team), ...opts });
+    if (!opts.keepPos) this.g.world.pushOut(u.pos);   // nicht in Häusern einsperren
     u.pos.y = this.g.world.groundAt(u.pos.x, u.pos.z);
     this.list.push(u);
     this.byId.set(u.uid, u);
@@ -212,7 +218,7 @@ export class Units {
       const view = W.los(eyeP, far);
       if ((cover && view) || i > n * 5) spots.push(new THREE.Vector3(x, 0, z));
     }
-    while (spots.length < n) spots.push(c.clone().add(_v.set((rand() - 0.5) * 8, 0, (rand() - 0.5) * 8)));
+    while (spots.length < n) spots.push(W.pushOut(c.clone().add(_v.set((rand() - 0.5) * 8, 0, (rand() - 0.5) * 8))));
     sq.spots = spots;
     sq.units.forEach((u, i) => { u.spot = spots[i]; });
   }
@@ -262,7 +268,7 @@ export class Units {
     if (!u.downed) return;
     u.downed = false; u.alive = true; u.hp = hp; u.deadT = 0; u.medicFor = null;
     u.stance = 1; u.suppress = 0.5; u.target = null;
-    u.rig.body.rotation.set(0, 0, 0); u.rig.body.position.set(0, 0, 0); u.rig.hips.position.y = 0.95;
+    u.rig.resetPose(); u.fallP = null;
     const B = bloodAssets();
     if (!u.bandaged) { const band = new THREE.Mesh(new THREE.CylinderGeometry(0.175, 0.175, 0.07, 12), B.band); band.scale.z = 0.7; band.position.y = 0.3; u.rig.torso.add(band); u.bandaged = true; }
     if (this.g.net && this.g.net.isHost) this.g.net.send({ t: 'rvu', u: u.uid });
@@ -284,6 +290,7 @@ export class Units {
     if (canDown) { u.downed = true; u.bleed = 50 + rand() * 25; this.bloodPool(u); }
     else u.downed = false;
     u.fallDir = dir ? Math.atan2(dir.x, dir.z) : 0;
+    u.fallP = fallParams(u.yaw, dir, head, blast);
     this.g.onUnitKilled(u, owner, head);
     if (this.g.net && this.g.net.isHost) this.g.net.unitKilled(u);
   }
@@ -302,6 +309,8 @@ export class Units {
     if (tg) tg.destroyed = true;
     g.world.addBox({ x: t.pos.x, z: t.pos.z, hw: t.spec.wid / 2, hd: t.spec.len / 2, rot: t.yaw, y0: t.pos.y - 1, y1: t.pos.y + t.spec.hgt + 0.5, kind: 'wall' });
     g.onTankKilled(t, owner);
+    if (g.crew) g.crew.tankLost(t);
+    t.crew = [null, null];
     if (g.net && g.net.isHost) g.net.tankKilled(t);
   }
 
@@ -320,7 +329,7 @@ export class Units {
     const g = this.g, out = this._en || (this._en = []);
     out.length = 0;
     for (const u of this.list) if (u.alive && u.team !== team && !u.inBoat) out.push(u);
-    if (g.player.alive && !g.player.downed && g.player.team !== team && !g.player.inBoat) out.push(g.player);
+    if (g.player.alive && !g.player.downed && g.player.team !== team && !g.player.inBoat && !g.player.tank) out.push(g.player);
     for (const av of g.avatars.values()) if (av.alive && !av.downed && av.visible && av.team !== team) out.push(av);
     return out;
   }
@@ -730,9 +739,11 @@ export class Units {
     const g = this.g, W = g.world;
     const m = t.m;
     if (!t.alive) return;
+    // von Spielern besetzt: Sitz 0 fährt und richtet selbst, Sitz 1 bedient das MG
+    const drv = !!(t.crew && t.crew[0] !== null), mgH = !!(t.crew && t.crew[1] !== null);
     // Fahren
-    let moving = false;
-    if (t.path && t.pathI < t.path.length) {
+    let moving = drv ? !!t.moving : false;
+    if (!drv && t.path && t.pathI < t.path.length) {
       const enemyNear = this.enemiesOf(t.team).some((e) => e.pos.distanceTo(t.pos) < 35 && !e.isTank);
       const p = t.path[t.pathI];
       const dx = p[0] - t.pos.x, dz = p[1] - t.pos.z, d = Math.hypot(dx, dz);
@@ -772,19 +783,20 @@ export class Units {
     if (t.target && (t.target.alive)) {
       const dx = t.target.pos.x - t.pos.x, dz = t.target.pos.z - t.pos.z;
       const want = wrapAngle(Math.atan2(-dx, -dz) - t.yaw);
-      if (t.spec.casemate) { t.yaw += clamp(want, -0.3 * dt, 0.3 * dt); }
+      if (drv) { /* Turm richtet der Spieler */ }
+      else if (t.spec.casemate) { t.yaw += clamp(want, -0.3 * dt, 0.3 * dt); }
       else t.turretYaw += clamp(wrapAngle(want - t.turretYaw), -0.6 * dt, 0.6 * dt);
-      m.turret.rotation.y = t.spec.casemate ? 0 : t.turretYaw;
+      if (!drv) m.turret.rotation.y = t.spec.casemate ? 0 : t.turretYaw;
       const aimErr = Math.abs(wrapAngle((t.spec.casemate ? 0 : t.turretYaw) - want));
       t.nextFire -= dt;
       const d = Math.hypot(dx, dz);
-      if (t.nextFire <= 0 && aimErr < 0.06) {
+      if (!drv && t.nextFire <= 0 && aimErr < 0.06) {
         t.nextFire = 6 + rand() * 4;
         this.tankFire(t, d);
       }
       // Bug-/Turm-MG
       t.mgT -= dt;
-      if (t.mgT <= 0 && d < 220 && !t.target.isTank) {
+      if (!mgH && t.mgT <= 0 && d < 220 && !t.target.isTank) {
         if (t.mgBurst <= 0) { t.mgBurst = 8 + (rand() * 10 | 0); }
         t.mgBurst--;
         t.mgT = t.mgBurst > 0 ? 0.06 : 1.5 + rand() * 2;
@@ -847,13 +859,15 @@ export class Units {
         u.rig.root.position.copy(u.pos); u.rig.root.rotation.y = u.yaw;
         if (u.pool) u.pool.visible = false;
       }
-      if (host) { u.bleed -= dt * (pl.dragging === u ? 0.5 : 1); if (u.bleed <= 0) { u.downed = false; u.deadT = 0; if (u.marker) u.marker.visible = false; } }
+      if (host) { u.bleed -= dt * (pl.dragging === u ? 0.5 : 1); if (u.bleed <= 0) { u.downed = false; u.deadT = Math.max(u.deadT, 3); if (u.marker) u.marker.visible = false; } }
       if (u.pool && u.poolS < 1.3 && pl.dragging !== u) { u.poolS += dt * 0.04; u.pool.scale.set(u.poolS, u.poolS, 1); }
       this.mark(u, this.g.camera.position.distanceTo(u.pos));
     } else if (u.marker) u.marker.visible = false;
     if (u.deadT < 3) {
+      // Mitspieler kennen die Trefferrichtung nicht: Fallart aus der Einheit-ID (gleich auf allen Geräten)
+      if (!u.fallP) { let sd = u.uid * 9301 + 49297; const rn = () => ((sd = (sd * 9301 + 49297) % 233280) / 233280); u.fallP = fallParams(u.yaw, null, false, false, rn); }
       u.rig.root.rotation.y = u.yaw;
-      u.rig.pose(0, 0, 0, dt, Math.min(1, u.deadT * 2.2));
+      u.rig.fall(u.deadT, u.fallP);
     }
   }
 
@@ -910,7 +924,8 @@ export class Units {
       out.push(u.uid, u.team === 'us' ? 0 : 1, ROLES.indexOf(u.role), Math.round(u.pos.x * 10) / 10, Math.round(u.pos.y * 10) / 10, Math.round(u.pos.z * 10) / 10,
         Math.round(u.yaw * 100) / 100, Math.round(u.pitch * 100) / 100, u.stance | (u.alive ? 0 : 4) | (u.firing > 0.5 ? 8 : 0) | (u.chute ? 16 : 0) | (u.downed ? 32 : 0), WIDS.indexOf(u.wid));
     }
-    const T2 = this.tanks.map((t) => [t.id, t.type, t.team === 'us' ? 0 : 1, Math.round(t.pos.x * 10) / 10, Math.round(t.pos.z * 10) / 10, Math.round(t.yaw * 100) / 100, Math.round(t.turretYaw * 100) / 100, t.alive ? 1 : 0]);
+    const T2 = this.tanks.map((t) => [t.id, t.type, t.team === 'us' ? 0 : 1, Math.round(t.pos.x * 10) / 10, Math.round(t.pos.z * 10) / 10, Math.round(t.yaw * 100) / 100, Math.round(t.turretYaw * 100) / 100, t.alive ? 1 : 0,
+      t.crew && t.crew[0] !== null ? t.crew[0] : -1, t.crew && t.crew[1] !== null ? t.crew[1] : -1, Math.round((t.gunEl || 0) * 100) / 100]);
     return { u: out, t: T2 };
   }
 
@@ -946,10 +961,14 @@ export class Units {
       u.netChute = !!(fl & 16);
     }
     for (const u of this.list) if (!seen.has(u.uid) && !u.alive) u.deadT = Math.max(u.deadT, 30);
-    for (const [id, type, tm, x, z, yaw, ty, alive] of s.t || []) {
+    const pl = this.g.player;
+    for (const [id, type, tm, x, z, yaw, ty, alive, c0, c1, el] of s.t || []) {
       let t = this.tanks.find((q) => q.id === id);
       if (!t) { t = this.spawnTank(type, tm ? 'de' : 'us', new THREE.Vector3(x, 0, z), yaw, id); }
-      t.netPos = new THREE.Vector3(x, 0, z); t.netYaw = yaw; t.turretYaw = ty;
+      t.crew = [c0 >= 0 ? c0 : null, c1 >= 0 ? c1 : null];
+      if (t.crewHold && t.crewHold.until > this.g.time) t.crew[t.crewHold.s] = t.crewHold.v;   // eigener Wechsel noch unterwegs
+      const mine = pl.tank === t && pl.seat === 0;   // selbst gefahren: eigene Rechnung gilt
+      if (!mine) { t.netPos = new THREE.Vector3(x, 0, z); t.netYaw = yaw; t.turretYaw = ty; t.gunEl = el || 0; }
       if (t.alive && !alive) this.destroyTank(t, null);
     }
   }
@@ -973,7 +992,12 @@ export class Units {
       u.speed = Math.min(u.speed, 4);
     }
     for (const t of this.tanks) {
-      if (t.netPos && t.alive) {
+      if (t.alive && this.g.player.tank === t && this.g.player.seat === 0) {
+        t.pos.y = W.groundAt(t.pos.x, t.pos.z, t.pos.y + 1);
+        t.m.root.position.copy(t.pos); t.m.root.rotation.y = t.yaw;
+        const n = W.normal(t.pos.x, t.pos.z, _v); t.m.root.rotation.x = Math.atan2(-(n.x * -Math.sin(t.yaw) + n.z * -Math.cos(t.yaw)), n.y) * 0.8;
+      } else if (t.netPos && t.alive) {
+        t.m.gun.rotation.x = t.gunEl || 0;
         t.pos.x += (t.netPos.x - t.pos.x) * Math.min(1, dt * 6); t.pos.z += (t.netPos.z - t.pos.z) * Math.min(1, dt * 6);
         t.yaw = lerpAngle(t.yaw, t.netYaw, Math.min(1, dt * 6));
         t.pos.y = W.groundAt(t.pos.x, t.pos.z, t.pos.y + 1);

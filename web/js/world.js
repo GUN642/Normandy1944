@@ -29,7 +29,7 @@ export class World {
     this.targets = {};
     this.anchors = {};
     this.ropes = [];
-    this.walk = [];          // begehbare Flächen (Brücke, Bunkerdächer): { x0,x1,z0,z1,y }
+    this.walk = []; this.whash = new Map(); this.footprints = [];          // begehbare Flächen (Brücke, Bunkerdächer): { x0,x1,z0,z1,y }
     this.water = !!(this.def.sea || this.def.flood || this.def.canal || this.def.river);
     this.base = this.water || mapId === 'stlo' ? 0 : 8;
     this.flags = [];
@@ -83,8 +83,58 @@ export class World {
   // Bodenhöhe inkl. begehbarer Bauten (Brücke, Bunkerdach) – y: aktuelle Fußhöhe
   groundAt(x, z, y = 1e9) {
     let g = this.h(x, z);
-    for (const w of this.walk) if (x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1 && y > w.y - 1.2 && w.y > g) g = w.y;
+    const l = this.whash.get(Math.floor((x + HALF) / HASH) * 1000 + Math.floor((z + HALF) / HASH));
+    if (l) for (const w of l) {
+      if (!(x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1 && y > w.y - 1.2 && w.y > g)) continue;
+      if (w.rotd) { const dx = x - w.x, dz = z - w.z; if (Math.abs(dx * w.c - dz * w.s) > w.hw || Math.abs(dx * w.s + dz * w.c) > w.hd) continue; }
+      g = w.y;
+    }
     return g;
+  }
+
+  // begehbare Fläche: achsparallel { x0,x1,z0,z1,y } oder gedreht { x,z,hw,hd,rot,y }
+  addWalk(w) {
+    if (w.x0 === undefined) {
+      const c = Math.cos(w.rot || 0), s = Math.sin(w.rot || 0);
+      w.c = c; w.s = s; w.rotd = true;
+      const ex = Math.abs(c) * w.hw + Math.abs(s) * w.hd, ez = Math.abs(s) * w.hw + Math.abs(c) * w.hd;
+      w.x0 = w.x - ex; w.x1 = w.x + ex; w.z0 = w.z - ez; w.z1 = w.z + ez;
+    }
+    this.walk.push(w);
+    for (let i = Math.floor((w.x0 + HALF) / HASH); i <= Math.floor((w.x1 + HALF) / HASH); i++)
+      for (let j = Math.floor((w.z0 + HALF) / HASH); j <= Math.floor((w.z1 + HALF) / HASH); j++) {
+        const k = i * 1000 + j;
+        if (!this.whash.has(k)) this.whash.set(k, []);
+        this.whash.get(k).push(w);
+      }
+    return w;
+  }
+
+  // Gebäude eintragen (Geometrie, Kollision, Böden/Treppen, Grundriss)
+  addBuilding(b) {
+    b.meshes.forEach((m) => this.addMesh(m));
+    b.boxes.forEach((bx) => this.addBox(bx));
+    (b.walks || []).forEach((w) => this.addWalk(w));
+    for (const f of b.footprints || (b.footprint ? [b.footprint] : [])) {
+      f.c = Math.cos(f.rot || 0); f.s = Math.sin(f.rot || 0);
+      this.footprints.push(f);
+    }
+    return b;
+  }
+  // Grundriss eines Gebäudes an (x, z)? margin vergrößert ihn
+  footprintAt(x, z, margin = 0) {
+    for (const f of this.footprints) {
+      const dx = x - f.x, dz = z - f.z;
+      if (Math.abs(dx) > f.hw + f.hd + margin || Math.abs(dz) > f.hw + f.hd + margin) continue;
+      if (Math.abs(dx * f.c - dz * f.s) <= f.hw + margin && Math.abs(dx * f.s + dz * f.c) <= f.hd + margin) return f;
+    }
+    return null;
+  }
+  // Punkt in einem Gebäude (ohne Weg hinein) → vor die Tür setzen
+  pushOut(p) {
+    const f = this.footprintAt(p.x, p.z, 0.3);
+    if (f) { p.x = f.door.x; p.z = f.door.z; p.y = this.groundAt(p.x, p.z); }
+    return p;
   }
 
   waterDepth(x, z) { return this.water ? Math.max(0, -this.h(x, z)) : 0; }
@@ -331,10 +381,10 @@ export class World {
     }
     if (this.nearRoad(x, z, Math.max(w, dd) / 2 - 0.5)) return null;
     for (const t of this.towns) if (t.square && Math.abs(x - t.square.x) < t.square.w / 2 + w / 2 && Math.abs(z - t.square.z) < t.square.d / 2 + dd / 2) return null;
+    for (const f of this.footprints) if (Math.hypot(f.x - x, f.z - z) < r + Math.hypot(f.hw, f.hd)) return null;
     const y = Math.min(this.h(x - w / 2, z - dd / 2), this.h(x + w / 2, z + dd / 2), this.h(x, z)) ;
-    const hs = buildHouse(x, z, y, w, dd, floors, ry, { plaster: rng() < 0.25, tiles: rng() < 0.15, shutter: rng.pick([0x5d6e66, 0x6a4a3a, 0x4a5a6a, 0x7a7a6a]), ...opt });
-    hs.meshes.forEach((m) => this.addMesh(m));
-    hs.boxes.forEach((b) => this.addBox(b));
+    const hs = buildHouse(x, z, y, w, dd, floors, ry, { plaster: rng() < 0.25, tiles: rng() < 0.15, shutter: rng.pick([0x5d6e66, 0x6a4a3a, 0x4a5a6a, 0x7a7a6a]), hAt: (a, b) => this.h(a, b), ...opt });
+    this.addBuilding(hs);
     return hs;
   }
 
@@ -383,8 +433,8 @@ export class World {
       for (let i = 0; i < ra.n; i++) {
         const x = ra.x0 + (i + 0.5) * (ra.x1 - ra.x0) / ra.n + (rng() - 0.5) * 20, z = ra.z + 9 + rng() * 6;
         if (Math.abs(x + 185) < 25) continue;
-        const rs = i % 2 ? buildRuin(x, z, this.h(x, z), 8, 7, (rng() - 0.5) * 0.2, rng) : buildHouse(x, z, this.h(x, z), 8, 7, 2, (rng() - 0.5) * 0.2, { plaster: true, tiles: false });
-        rs.meshes.forEach((m) => this.addMesh(m)); rs.boxes.forEach((b) => this.addBox(b));
+        const rs = i % 2 ? buildRuin(x, z, this.h(x, z), 8, 7, (rng() - 0.5) * 0.2, rng) : buildHouse(x, z, this.h(x, z), 8, 7, 2, (rng() - 0.5) * 0.2, { plaster: true, tiles: false, hAt: (a, b) => this.h(a, b) });
+        this.addBuilding(rs);
       }
     }
     if (d.station) {
@@ -394,9 +444,8 @@ export class World {
   }
 
   addChurch(x, z, ry) {
-    const c = buildChurch(x, z, this.h(x, z), ry);
-    c.meshes.forEach((m) => this.addMesh(m));
-    c.boxes.forEach((b) => this.addBox(b));
+    const c = buildChurch(x, z, this.h(x, z), ry, (a, b) => this.h(a, b));
+    this.addBuilding(c);
     this.towers = this.towers || [];
     this.towers.push(c.tower);
   }
@@ -432,7 +481,7 @@ export class World {
           const b = buildBunker(f.x, f.z, y, f.ry || 0, f.size || 1);
           b.meshes.forEach((m) => this.addMesh(m));
           b.boxes.forEach((bx) => this.addBox(bx));
-          this.walk.push({ x0: f.x - 3, x1: f.x + 3, z0: f.z - 2.5, z1: f.z + 2.5, y: y + 3.55 * (f.size || 1) });
+          this.addWalk({ x0: f.x - 3, x1: f.x + 3, z0: f.z - 2.5, z1: f.z + 2.5, y: y + 3.55 * (f.size || 1) });
           if (f.id) {
             this.targets[f.id] = { id: f.id, kind: 'bunker', pos: new THREE.Vector3(f.x, y + 1.5, f.z), gunPos: b.gunPos, hp: 400, crew: !!f.crew, destroyed: false, meshes: b.meshes };
             this.anchors[f.id] = b.gunPos.clone();
@@ -524,7 +573,7 @@ export class World {
           for (const sz of [-1, 1]) parts.push({ geo: new THREE.BoxGeometry(f.len, 0.9, 0.4), color: 0x8a8274, matrix: M4(f.x, by + 0.45, f.z + sz * (f.w / 2 - 0.2)) });
           parts.push({ geo: new THREE.BoxGeometry(2, 4, f.w - 1), color: 0x8a8274, matrix: M4(f.x, by - 2.4, f.z) });
           const m = new THREE.Mesh(mergeColored(parts), MAT.vc); m.castShadow = m.receiveShadow = true; this.group.add(m);
-          this.walk.push({ x0: f.x - f.len / 2, x1: f.x + f.len / 2, z0: f.z - f.w / 2, z1: f.z + f.w / 2, y: by });
+          this.addWalk({ x0: f.x - f.len / 2, x1: f.x + f.len / 2, z0: f.z - f.w / 2, z1: f.z + f.w / 2, y: by });
           for (const sz of [-1, 1]) this.addBox({ x: f.x, z: f.z + sz * (f.w / 2 - 0.2), hw: f.len / 2, hd: 0.25, rot: 0, y0: by - 0.5, y1: by + 0.9, kind: 'wall' });
           break;
         }
@@ -555,7 +604,7 @@ export class World {
           this.addBox({ x: f.x, z: f.z, hw: W2 / 2 + 0.8, hd: D2 / 2 + 0.8, rot: 0, y0: y0 - 1, y1: y0 + H2 + 1, kind: 'house' });
           this.towers = this.towers || [];
           this.towers.push(new THREE.Vector3(f.x, y0 + H2 + 0.2, f.z - D2 / 2 + 1));
-          this.walk.push({ x0: f.x - W2 / 2, x1: f.x + W2 / 2, z0: f.z - D2 / 2, z1: f.z + D2 / 2, y: y0 + H2 });
+          this.addWalk({ x0: f.x - W2 / 2, x1: f.x + W2 / 2, z0: f.z - D2 / 2, z1: f.z + D2 / 2, y: y0 + H2 });
           break;
         }
         case 'wreck': {
@@ -688,7 +737,9 @@ export class World {
       const s = Math.abs(this.h(x + 1.5, z) - this.h(x - 1.5, z)) + Math.abs(this.h(x, z + 1.5) - this.h(x, z - 1.5));
       if (s > 4.2 && !this.ropeNear(x, z)) g[j * n + i] = 1;
     }
-    for (const w of this.walk) for (let x = w.x0; x < w.x1; x += 1) for (let z = w.z0 + 0.6; z < w.z1 - 0.6; z += 1) { const i = Math.floor((x + HALF) / NAV), j = Math.floor((z + HALF) / NAV); if (i >= 0 && j >= 0 && i < n && j < n && w.y < 2) g[j * n + i] = 0; }
+    // Gebäude: Innenräume sperren (die KI bleibt draußen bzw. an Fenstern)
+    for (const f of this.footprints) for (let u = -f.hw; u <= f.hw + 0.01; u += 1) for (let v = -f.hd; v <= f.hd + 0.01; v += 1) mark(f.x + u * f.c + v * f.s, f.z - u * f.s + v * f.c);
+    for (const w of this.walk) if (!w.house) for (let x = w.x0; x < w.x1; x += 1) for (let z = w.z0 + 0.6; z < w.z1 - 0.6; z += 1) { const i = Math.floor((x + HALF) / NAV), j = Math.floor((z + HALF) / NAV); if (i >= 0 && j >= 0 && i < n && j < n && w.y < 2) g[j * n + i] = 0; }
     this.nav = g;
   }
   ropeNear(x, z) { for (const r of this.ropes) if (Math.abs(x - r.x) < 2.5 && z > r.z - 3 && z < r.topZ + 2) return true; return false; }
