@@ -48,7 +48,10 @@ function helmetGeo(kind) {
   if (kind === 'm1') pts = [[0, 0.155], [0.06, 0.15], [0.105, 0.13], [0.13, 0.09], [0.14, 0.04], [0.142, 0.0], [0.175, -0.012], [0.18, -0.02], [0.165, -0.02], [0.13, -0.005]];
   else if (kind === 'stahl') pts = [[0, 0.15], [0.06, 0.145], [0.1, 0.125], [0.125, 0.09], [0.135, 0.04], [0.14, 0.0], [0.15, -0.035], [0.17, -0.07], [0.175, -0.085], [0.15, -0.07], [0.12, -0.02]];
   else pts = [[0, 0.14], [0.07, 0.135], [0.11, 0.11], [0.13, 0.07], [0.138, 0.02], [0.14, -0.03], [0.125, -0.04], [0.11, -0.0]];
-  const g = new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), 14);
+  // Innenschale (Helmfutter) mitdrehen, damit der Helm von unten nicht durchsichtig ist
+  const last = pts[pts.length - 1];
+  pts = pts.concat([[last[0] - 0.004, last[1] + 0.03], [0.118, 0.07], [0.095, 0.115], [0.05, 0.135], [0, 0.14]]);
+  const g = new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), 16);
   if (kind === 'stahl') { // Nackenschirm tiefer als Stirn
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) { const z = p.getZ(i), y = p.getY(i); if (y < 0) p.setY(i, y + (z < 0 ? 0.02 * (-z / 0.17) : -0.015 * (z / 0.17))); }
@@ -105,10 +108,12 @@ function soldierParts(uni) {
     { geo: geo.box(0.04, 0.008, 0.01), color: 0x7a4a3a, matrix: M4(0, 0.055, -0.093) },                           // Mund
     { geo: geo.sph(0.022, 6, 5), color: U.skin, matrix: M4s(0.095, 0.105, 0.0, 0, 0.5, 1, 0.8) },                // Ohren
     { geo: geo.sph(0.022, 6, 5), color: U.skin, matrix: M4s(-0.095, 0.105, 0.0, 0, 0.5, 1, 0.8) },
-    { geo: helmetGeo(U.fj ? 'fj' : U.stiefel ? 'stahl' : 'm1'), color: U.helmet, matrix: M4(0, 0.135, 0.005) },
+    // kurze Haare an Hinterkopf und Seiten (statt Kopfhaut unter dem Helmrand)
+    { geo: new THREE.SphereGeometry(0.104, 14, 8, Math.PI / 2 - 1.95, 3.9, 0, 1.75), color: U.hair || 0x3a2a1c, matrix: M4s(0, 0.103, 0.004, 0, 0.94, 1.1, 1.02) },
+    { geo: helmetGeo(U.fj ? 'fj' : U.stiefel ? 'stahl' : 'm1'), color: U.helmet, matrix: M4(0, 0.118, 0.008) },
     { geo: geo.box(0.17, 0.012, 0.012), color: 0x2a2a2a, matrix: M4(0, 0.03, -0.06) },                             // Kinnriemen
   ];
-  if (U.net) head.push({ geo: geo.sph(0.152, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), color: 0x3d3f2a, matrix: M4s(0, 0.15, 0.005, 0, 1, 0.75, 1) });
+  if (U.net) head.push({ geo: geo.sph(0.152, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), color: 0x3d3f2a, matrix: M4s(0, 0.133, 0.008, 0, 1, 0.75, 1) });
   const upperArm = [{ geo: cap(0.052, 0.22), color: U.jacket, matrix: M4(0, -0.15, 0) }];
   const foreArm = [
     { geo: cap(0.046, 0.19), color: U.jacket, matrix: M4(0, -0.13, 0) },
@@ -225,7 +230,7 @@ export class SoldierRig {
     if (stance === 2) {
       this.body.rotation.x = -Math.PI / 2 + 0.08; this.body.position.set(0, 0.22, 0.75);
       this.hips.position.y = 0.95;
-      for (let i = 0; i < 2; i++) { this.legs[i].th.rotation.x = (i ? -s : s) * amp * 0.4; this.legs[i].sh.rotation.x = 0.1; }
+      for (let i = 0; i < 2; i++) { this.legs[i].th.rotation.x = (i ? -s : s) * amp * 0.4; this.legs[i].sh.rotation.x = -0.1; }
       this.aim.rotation.x = Math.PI / 2 - 0.1 + pitch * 0.6;
       this.headG.rotation.x = Math.PI / 2 - 0.25;
       return;
@@ -237,8 +242,9 @@ export class SoldierRig {
     this.torso.rotation.x = crouch ? -0.35 : -0.06 * amp;
     for (let i = 0; i < 2; i++) {
       const ph = i ? -s : s;
-      if (crouch) { this.legs[i].th.rotation.x = -1.1 + ph * amp * 0.5 + (i ? 0.5 : 0); this.legs[i].sh.rotation.x = 1.6 - (i ? 0.6 : 0); }
-      else { this.legs[i].th.rotation.x = ph * amp * 0.7; this.legs[i].sh.rotation.x = Math.max(0, -Math.cos(this.walk + (i ? Math.PI : 0))) * amp * 1.1 + 0.05; }
+      // Knie zeigen nach vorn: Oberschenkel positiv (nach vorn), Unterschenkel negativ (beugt nach hinten)
+      if (crouch) { this.legs[i].th.rotation.x = 1.1 + ph * amp * 0.5 - (i ? 0.5 : 0); this.legs[i].sh.rotation.x = -(1.6 - (i ? 0.6 : 0)); }
+      else { this.legs[i].th.rotation.x = ph * amp * 0.7; this.legs[i].sh.rotation.x = -(Math.max(0, -Math.cos(this.walk + (i ? Math.PI : 0))) * amp * 1.1 + 0.05); }
     }
     this.aim.rotation.x = pitch - this.torso.rotation.x - firing * 0.04;
   }
@@ -270,8 +276,8 @@ export class SoldierRig {
     this.hips.position.y = 0.95 - 0.42 * k1 + 0.05 * k2;
     for (let i = 0; i < 2; i++) {
       const L = this.legs[i], side = i ? 0.25 : -0.1;
-      L.th.rotation.x = -P.knee * k1 * (1 - 0.7 * k2) + side * k2;
-      L.sh.rotation.x = P.knee * 1.7 * k1 * (1 - 0.6 * k2) + 0.1;
+      L.th.rotation.x = P.knee * k1 * (1 - 0.7 * k2) + side * k2;          // Knie nach vorn
+      L.sh.rotation.x = -(P.knee * 1.7 * k1 * (1 - 0.6 * k2) + 0.1);     // Unterschenkel nach hinten
     }
     // Oberkörper sackt zusammen, Kopf fällt zur Seite bzw. nach hinten
     this.torso.rotation.x = -0.45 * k1 * (1 - k2) + (P.ax > 0 ? 0.15 : -0.1) * k2;

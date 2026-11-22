@@ -766,6 +766,22 @@ class Game {
       const wait = 8;
       text += `<p>${T('Wiedereinstieg in', 'Respawn in')} ${Math.max(0, Math.ceil(wait - this.deadT))} s</p><div class="clsrow">${PLAYER_CLASSES.map((c, i) => `<button data-c="${c}" class="${this.nextCls === c || (!this.nextCls && c === p.cls) ? 'on' : ''}">${i + 1} ${esc(L(CLASSES[c].name))}</button>`).join('')}</div>`;
       for (let i = 0; i < PLAYER_CLASSES.length; i++) if (this.input.down.has('Digit' + (i + 1))) this.nextCls = PLAYER_CLASSES[i];
+      // Controller/Fernbedienung: Steuerkreuz bzw. Stick links/rechts (auch hoch/runter) wählt die Klasse, A steigt sofort ein
+      const m = this.input.gpMenu;
+      if (m) {
+        const d = m.right || m.down ? 1 : m.left || m.up ? -1 : 0;
+        const now = performance.now();
+        if (d && (d !== this._clsDir || now > this._clsRep)) {
+          const cur = Math.max(0, PLAYER_CLASSES.indexOf(this.nextCls || p.cls));
+          this.nextCls = PLAYER_CLASSES[(cur + d + PLAYER_CLASSES.length) % PLAYER_CLASSES.length];
+          this._clsRep = now + (d !== this._clsDir ? 400 : 180);
+          this.audio.play('bolt', null, 0.25, 1.6);
+        }
+        this._clsDir = d;
+        if (m.ok && !this._clsOk && this.deadT > 2.5) { this._clsOk = true; this.respawn(); return; }
+        this._clsOk = m.ok;
+      }
+      if (this.input.device === 'gamepad') text += `<p class="small">${T('◀ ▶ Klasse wählen · A sofort einsteigen', '◀ ▶ choose class · A respawn now')}</p>`;
       if (this.deadT > wait) { this.respawn(); return; }
     }
     if (this.deadT > 0.8) this.hud.respawn(true, text);
