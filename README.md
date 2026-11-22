@@ -52,6 +52,9 @@ Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbo
   eine Wendeltreppe bis zur Glockenstube (Scharfschützenposten mit Schallöffnungen in alle Richtungen).
 - **Realistisches Fallen:** Getroffene knicken in den Knien ein und kippen je nach Trefferrichtung nach vorn, hinten oder
   zur Seite, Kopftreffer sacken sofort zusammen, Explosionen schleudern weg.
+- **Controller einrichten** (Einstellungen): fragt ZR, ZL, R, L, die vier Tasten, +/−, Stickdruck und den rechten Stick
+  nacheinander ab und speichert die tatsächlich gemeldete Belegung je Controller – falls Android einen Controller
+  ungewohnt meldet. „Controller testen“ zeigt live, was der Controller sendet.
 - **Zielhilfe** für Touch und Controller wie im Medevac-sim; Controller inkl. Switch Pro/Joy-Con und Android TV.
 
 ## Waffen (historische Kenndaten, detaillierte 3D-Modelle)

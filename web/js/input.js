@@ -204,7 +204,14 @@ export class Input {
       const joyR = /joy-?con\s*\(r\)|joy-?con\s+r\b|joy-?con\s*right/i.test(gp.id || '') && !/\(l\/r\)|pro controller/i.test(gp.id || '');
       let sx = A(0), sy = A(1), rx = A(ri), ry = A(rj);
       if (joyR) { rx = sx; ry = sy; sx = 0; sy = 0; }
-      (this.gpDiag || (this.gpDiag = {}))[gp.index] = { id: gp.id, mapping: gp.mapping || '-', axes: ax.map((v) => (v || 0).toFixed(2)), rest: cal.rest.map((v) => v.toFixed(1)), btn: gp.buttons.map((b, i) => (b.pressed || b.value > 0.4 ? i : -1)).filter((i) => i >= 0), ri, rj, joyR, look: [rx.toFixed(2), ry.toFixed(2)], move: [sx.toFixed(2), sy.toFixed(2)] };
+      // eigene Belegung aus der Controller-Einrichtung (pro Gerätename gespeichert)
+      const M = this.settings.padMaps && this.settings.padMaps[gp.id];
+      const cv = (c) => (!c ? 0 : c.t === 'b' ? btn(c.i) : Math.max(0, ((ax[c.i] || 0) - c.r) * c.s));
+      const stick = (c) => dz(Math.max(-1, Math.min(1, ((ax[c.i] || 0) - c.r) * c.s)));
+      if (M && M.rx) rx = stick(M.rx);
+      if (M && M.ry) ry = stick(M.ry);
+      const pick = (k, i) => (M && M.b && M.b[k] ? cv(M.b[k]) > 0.4 : btn(i) > 0.4);
+      (this.gpDiag || (this.gpDiag = {}))[gp.index] = { id: gp.id, mapping: gp.mapping || '-', axes: ax.map((v) => (v || 0).toFixed(2)), rest: cal.rest.map((v) => v.toFixed(1)), btn: gp.buttons.map((b, i) => (b.pressed || b.value > 0.4 ? i : -1)).filter((i) => i >= 0), ri, rj, joyR, custom: !!M, look: [rx.toFixed(2), ry.toFixed(2)], move: [sx.toFixed(2), sy.toFixed(2)] };
       const any = Math.abs(sx) + Math.abs(sy) + Math.abs(rx) + Math.abs(ry) > 0.2 || gp.buttons.some((x) => x.pressed);
       if (any) { this.device = 'gamepad'; this.padT = performance.now(); document.body.classList.remove('touchmode'); }
       mx += sx; my += -sy;
@@ -223,33 +230,28 @@ export class Input {
       const G = this.gpAct;
       if (this.radioMode) {
         // Funkmenü offen: Gesichtstasten wählen den Eintrag 1–4
-        if (on(0)) G.add('w1'); if (on(1)) G.add('w2'); if (on(2)) G.add('w3'); if (on(3)) G.add('w4');
+        if (pick('jump', 0)) G.add('w1'); if (pick('crouch', 1)) G.add('w2'); if (pick('reload', 2)) G.add('w3'); if (pick('wnext', 3)) G.add('w4');
         if (hy < 0) G.add('radio');
       } else {
-        if (on(0)) G.add('jump');
-        if (on(1)) G.add('crouch');
-        if (on(2)) G.add('reload');
-        if (on(3)) G.add('wnext');
-        if (on(4)) G.add('grenade');
-        if (on(5)) G.add('use');
-        if (btn(6) > 0.4) G.add('aim');
-        if (btn(7) > 0.4) G.add('fire');
-        if (on(11) || (joyR && on(10))) G.add('prone');   // Joy-Con (R) allein: Stickdruck kommt als Taste 10
+        for (const [k, i] of [['jump', 0], ['crouch', 1], ['reload', 2], ['wnext', 3], ['grenade', 4], ['use', 5], ['aim', 6], ['fire', 7]]) if (pick(k, i)) G.add(k);
+        if (pick('prone', 11) || (joyR && !M && on(10))) G.add('prone');   // Joy-Con (R) allein: Stickdruck kommt als Taste 10
         if (hy < 0) G.add('radio');
         if (hy > 0) G.add('heal');
         if (hx < 0) G.add('ptt');
         if (hx > 0) G.add('map');
       }
-      if (on(8)) G.add('score');
-      if (on(9)) G.add('pause');
+      if (pick('score', 8)) G.add('score');
+      if (pick('pause', 9)) G.add('pause');
       // linken Stick drücken: Sprint umschalten (endet, wenn der Stick losgelassen wird)
-      if (!joyR && on(10) && !prev[10]) this.padSprint = !this.padSprint;
+      const lsc = !joyR && pick('sprint', 10), lsp = this._lsPrev || (this._lsPrev = {});
+      if (lsc && !lsp[gp.index]) this.padSprint = !this.padSprint;
+      lsp[gp.index] = lsc;
       if (Math.hypot(sx, sy) < 0.2) this.padSprint = false;
       if (this.padSprint) G.add('sprint');
       // Menüsteuerung: Stick, Steuerkreuz; bestätigen mit A oder B (beide unteren/rechten Tasten wie im Medevac-sim)
       menu.up = menu.up || hy < 0 || sy < -0.6; menu.down = menu.down || hy > 0 || sy > 0.6;
       menu.left = menu.left || hx < 0 || sx < -0.6; menu.right = menu.right || hx > 0 || sx > 0.6;
-      menu.ok = menu.ok || on(0) || on(1); menu.back = menu.back || on(8); menu.start = menu.start || on(9);
+      menu.ok = menu.ok || pick('jump', 0) || pick('crouch', 1); menu.back = menu.back || pick('score', 8); menu.start = menu.start || pick('pause', 9);
       this.gpPrevB[gp.index] = gp.buttons.map((x) => x.pressed);
     }
     if (!found) { this.gp = null; this.gpMenu = null; return; }

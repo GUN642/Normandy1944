@@ -1035,6 +1035,7 @@ class Game {
     on('p-help', () => { this.helpBack = 'pause'; this.showMenu('help'); });
     on('res-menu', () => this.toMenu());
     on('set-back', () => { saveSettings(this.settings); $('padtest').classList.add('hidden'); clearInterval(this._padT); this.showMenu(this.settingsBack || 'menu'); });
+    on('set-padsetup', () => this.padSetup());
     // Controller-Test: zeigt live, was der Controller meldet (für Fehlersuche, z. B. Foto an den Entwickler)
     on('set-padtest', () => {
       const el = $('padtest'); el.classList.toggle('hidden');
@@ -1043,7 +1044,7 @@ class Game {
       const upd = () => {
         const d = this.input.gpDiag || {}, ids = Object.keys(d);
         const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
-        el.textContent = (ids.length ? ids.map((k) => { const q = d[k]; return `#${k} ${q.id}\nMapping: ${q.mapping}${q.joyR ? ' · Joy-Con (R)' : ''}\nAchsen: ${q.axes.join(' ')}\nRuhelage: ${q.rest.join(' ')}\nRechter Stick = Achse ${q.ri}/${q.rj} → Blick ${q.look.join(', ')} · Bewegen ${q.move.join(', ')}\nTasten gedrückt: ${q.btn.join(', ') || '–'}`; }).join('\n\n') : T('Kein Controller erkannt – eine Taste drücken.', 'No controller detected – press a button.')) + `\n\n${T('Verbundene Geräte', 'Connected devices')}: ${pads.length}`;
+        el.textContent = (ids.length ? ids.map((k) => { const q = d[k]; return `#${k} ${q.id}\nMapping: ${q.mapping}${q.joyR ? ' · Joy-Con (R)' : ''}${q.custom ? ' · ' + T('eigene Belegung', 'custom mapping') : ''}\nAchsen: ${q.axes.join(' ')}\nRuhelage: ${q.rest.join(' ')}\nRechter Stick = Achse ${q.ri}/${q.rj} → Blick ${q.look.join(', ')} · Bewegen ${q.move.join(', ')}\nTasten gedrückt: ${q.btn.join(', ') || '–'}`; }).join('\n\n') : T('Kein Controller erkannt – eine Taste drücken.', 'No controller detected – press a button.')) + `\n\n${T('Verbundene Geräte', 'Connected devices')}: ${pads.length}`;
       };
       upd(); this._padT = setInterval(upd, 150);
     });
@@ -1302,7 +1303,70 @@ class Game {
   // Gamepad-Navigation in Menüs
   menuSel() { return ['button:not([disabled])', 'select', 'input[type=range]', 'input[type=checkbox]', 'a.btn:not(.hidden)', 'input[type=text]', 'input:not([type])'].map((x) => '.screen:not(.hidden) ' + x).join(', '); }
 
+  // Controller einrichten: nacheinander Tasten/Achsen abfragen und die tatsächlich gemeldeten Nummern speichern.
+  // Hilft, wenn Android einen Controller anders meldet (z. B. Switch Pro nach neuem Koppeln, Joy-Cons, Fremd-Controller).
+  padSetup() {
+    const el = $('padtest');
+    clearInterval(this._padT);
+    el.classList.remove('hidden');
+    const steps = [
+      ['fire', T('ZR drücken (Feuern)', 'Press ZR (fire)')], ['aim', T('ZL drücken (Zielen)', 'Press ZL (aim)')],
+      ['use', T('R drücken (Benutzen / Verarzten)', 'Press R (use / patch up)')], ['grenade', T('L drücken (Granate)', 'Press L (grenade)')],
+      ['jump', T('untere Taste drücken – Switch: B (Springen)', 'Press the bottom button – Switch: B (jump)')], ['crouch', T('rechte Taste drücken – Switch: A (Hocken)', 'Press the right button – Switch: A (crouch)')],
+      ['reload', T('linke Taste drücken – Switch: Y (Nachladen)', 'Press the left button – Switch: Y (reload)')], ['wnext', T('obere Taste drücken – Switch: X (Waffe wechseln)', 'Press the top button – Switch: X (switch weapon)')],
+      ['pause', T('+ drücken (Pause)', 'Press + (pause)')], ['score', T('− drücken (Lage)', 'Press − (scoreboard)')],
+      ['sprint', T('linken Stick hineindrücken (Sprint)', 'Click the left stick (sprint)')], ['prone', T('rechten Stick hineindrücken (Hinlegen)', 'Click the right stick (prone)')],
+      ['rx', T('rechten Stick ganz nach RECHTS drücken', 'Push the right stick fully RIGHT')], ['ry', T('rechten Stick ganz nach UNTEN drücken', 'Push the right stick fully DOWN')],
+    ];
+    const map = { b: {} };
+    let i = 0, base = null, gpId = null, waitRelease = true, t0 = performance.now();   // erst loslassen (A vom Menü-Klick)
+    this.padWizard = true;
+    const pads = () => (navigator.getGamepads ? [...navigator.getGamepads()].filter((g) => g && g.connected) : []);
+    const snap = (g) => ({ a: g.axes.map((v) => v || 0), b: g.buttons.map((x) => x.pressed || x.value > 0.5) });
+    const done = (ok) => {
+      clearInterval(this._padT); this.padWizard = false;
+      if (ok && gpId) {
+        this.settings.padMaps = this.settings.padMaps || {};
+        this.settings.padMaps[gpId] = map; saveSettings(this.settings);
+        el.textContent = T('Gespeichert für: ', 'Saved for: ') + gpId + '\n' + T('Die Belegung gilt ab sofort. Zum Löschen: „Controller einrichten“ erneut starten und 10 s nichts drücken.', 'Mapping active now. To clear: start set-up again and press nothing for 10 s.');
+      } else if (gpId && this.settings.padMaps && this.settings.padMaps[gpId]) {
+        delete this.settings.padMaps[gpId]; saveSettings(this.settings);
+        el.textContent = T('Eigene Belegung gelöscht – automatische Erkennung aktiv.', 'Custom mapping removed – automatic detection active.');
+      } else el.textContent = T('Abgebrochen.', 'Cancelled.');
+    };
+    const tick = () => {
+      const list = pads();
+      if (!list.length) { el.textContent = T('Kein Controller erkannt – eine Taste drücken.', 'No controller detected – press a button.'); return; }
+      // Controller = der, an dem zuerst etwas passiert (bei Joy-Cons der jeweils gedrückte)
+      if (!base) { base = new Map(list.map((g) => [g.index, snap(g)])); t0 = performance.now(); }
+      const [key, text] = steps[i];
+      el.textContent = `${T('Controller einrichten', 'Controller set-up')} ${i + 1}/${steps.length}\n\n▶ ${text}\n\n${T('(10 s nichts drücken = überspringen bzw. beim ersten Schritt: eigene Belegung löschen)', '(press nothing for 10 s = skip; on the first step: remove custom mapping)')}`;
+      let hit = null;
+      for (const g of list) {
+        const b0 = base.get(g.index) || snap(g), cur = snap(g);
+        if (waitRelease) { if (cur.b.some((x, k) => x && !b0.b[k]) || cur.a.some((v, k) => Math.abs(v - b0.a[k]) > 0.3)) return; continue; }
+        const bi = cur.b.findIndex((x, k) => x && !b0.b[k]);
+        if (bi >= 0 && key !== 'rx' && key !== 'ry') { hit = { g, c: { t: 'b', i: bi } }; break; }
+        let best = -1, bd = 0.6;
+        cur.a.forEach((v, k) => { const d = Math.abs(v - b0.a[k]); if (d > bd) { bd = d; best = k; } });
+        if (best >= 0) { hit = { g, c: { t: 'a', i: best, s: Math.sign(cur.a[best] - b0.a[best]), r: +b0.a[best].toFixed(3) } }; break; }
+      }
+      if (waitRelease) { waitRelease = false; base = new Map(list.map((g) => [g.index, snap(g)])); t0 = performance.now(); return; }
+      if (hit) {
+        gpId = gpId || hit.g.id;
+        if (key === 'rx' || key === 'ry') map[key] = hit.c; else map.b[key] = hit.c;
+        this.audio.play('bolt', null, 0.4, 1.4);
+        i++; waitRelease = true;
+        if (i >= steps.length) done(true);
+        return;
+      }
+      if (performance.now() - t0 > 10000) { if (i === 0) { gpId = list[0].id; done(false); return; } i++; t0 = performance.now(); if (i >= steps.length) done(true); }
+    };
+    this._padT = setInterval(tick, 50);
+  }
+
   menuGamepad() {
+    if (this.padWizard) return;
     const m = this.input.gpMenu;
     if (!m) return;
     const btns = [...document.querySelectorAll(this.menuSel())].filter((b) => b.offsetParent);
