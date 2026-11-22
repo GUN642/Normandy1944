@@ -616,14 +616,19 @@ class Game {
     const p = this.player;
     const med = p.inBoat || p.chute ? null : this.medAction(p);
     this.medicContext = !!med || !!p.dragging;
-    // Ziehen: H (Verband-Taste) bzw. am Controller Y oder Steuerkreuz runter packt den Verwundeten bzw. lässt ihn los
+    // Ziehen: H (Verband-Taste), Steuerkreuz runter oder Benutzen-Taste (E/R) kurz antippen packt den Verwundeten bzw.
+    // lässt ihn los (gedrückt halten = verarzten). Y bleibt immer Waffenwechsel.
     const pad = inp.device === 'gamepad';
-    const dragKey = inp.pressed('heal') || (pad && this.medicContext && inp.pressed('wnext'));
+    if (inp.pressed('use')) this.useDownT = this.time;
+    const tapUse = inp.released('use') && this.useDownT !== undefined && this.time - this.useDownT < 0.3;
+    const dragKey = inp.pressed('heal') || (tapUse && (p.dragging || (med && med.kind === 'revive')));
     const before = p.dragging;
     if (dragKey) {
       if (p.dragging) { p.dragging = null; this.hud.toast(T('Losgelassen', 'Released')); }
-      else if (med && med.u && med.kind === 'revive') { p.dragging = med.u; p.ads = 0; this.hud.toast(pad ? T('Ziehe Verwundeten – Y: loslassen', 'Dragging the wounded – Y: let go') : T('Ziehe Verwundeten – H loslassen', 'Dragging the wounded – H to release')); }
+      else if (med && med.u && med.kind === 'revive') { p.dragging = med.u; p.ads = 0; this.hud.toast(pad ? T('Ziehe Verwundeten – R tippen, ZR oder ZL: loslassen', 'Dragging the wounded – tap R, ZR or ZL: let go') : T('Ziehe Verwundeten – H oder E tippen: loslassen', 'Dragging the wounded – H or tap E: let go')); }
     }
+    // Feuern oder Zielen lässt den Verwundeten sofort los (man muss sich wehren können)
+    else if (p.dragging && (inp.pressed('fire') || inp.pressed('aim'))) { p.dragging = null; this.hud.toast(T('Losgelassen', 'Released')); }
     if (p.dragging && (!p.dragging.downed || p.dragging.pos.distanceTo(p.pos) > 4.5)) p.dragging = null;
     // Mitspieler (Client): der Host bewegt den Verwundeten
     if (before !== p.dragging && this.net && !this.net.isHost) this.net.send({ t: 'drg', u: p.dragging ? p.dragging.uid : 0 });
@@ -670,8 +675,8 @@ class Game {
     }
     if (!best) return null;
     if (kind === 'bandage') return { kind, u: best, text: T('E halten: Kamerad verbinden (Verband)', 'Hold E: bandage comrade'), time: 2 };
-    if (this.input.device === 'gamepad') return { kind, u: best, text: T('R halten: verarzten', 'Hold R: patch up') + (p.dragging ? T(' · Y: loslassen', ' · Y: let go') : T(' · Y: in Deckung ziehen', ' · Y: drag to cover')), time: 3.5 };
-    return { kind, u: best, text: T('E halten: verarzten', 'Hold E: patch up') + (p.dragging ? T(' · H: loslassen', ' · H: let go') : T(' · H: in Deckung ziehen', ' · H: drag to cover')), time: 3.5 };
+    if (this.input.device === 'gamepad') return { kind, u: best, text: T('R halten: verarzten', 'Hold R: patch up') + (p.dragging ? T(' · R tippen: loslassen', ' · tap R: let go') : T(' · R tippen: in Deckung ziehen', ' · tap R: drag to cover')), time: 3.5 };
+    return { kind, u: best, text: T('E halten: verarzten', 'Hold E: patch up') + (p.dragging ? T(' · H / E tippen: loslassen', ' · H / tap E: let go') : T(' · H / E tippen: in Deckung ziehen', ' · H / tap E: drag to cover')), time: 3.5 };
   }
 
   // Munition: lebender Kamerad (alle 90 s), Funker (füllt auf) oder Gefallener (einmal)

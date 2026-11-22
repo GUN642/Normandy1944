@@ -40,8 +40,9 @@ Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbo
 - **Munition teilen:** E halten neben einem Kameraden (alle 90 s), bei einem Funker (füllt auf) oder bei Gefallenen.
 - **Markierungen:** blaues Dreieck über Kameraden, rotes über sichtbaren Feinden, gelbes mit Kreuz über Verwundeten – feste Bildschirmgröße, auch auf dem Fernseher gut sichtbar (abschaltbar).
 - **Verwundete:** Wer nicht in den Kopf oder durch eine Explosion getroffen wird, ist oft nur kampfunfähig, blutet und
-  stirbt ohne Hilfe nach rund einer Minute. E halten: verarzten · H: in Deckung ziehen · leicht Verletzte verbinden
-  (Controller: R halten = verarzten bzw. selbst verbinden, Y oder Steuerkreuz runter = ziehen/loslassen).
+  stirbt ohne Hilfe nach rund einer Minute. E halten: verarzten · H oder E kurz tippen: in Deckung ziehen · leicht Verletzte verbinden
+  (Controller: R halten = verarzten bzw. selbst verbinden, R kurz tippen oder Steuerkreuz runter = ziehen/loslassen;
+  Feuern oder Zielen lässt den Verwundeten sofort los).
   KI-Kameraden verarzten sich gegenseitig und kommen auch zum Spieler; im Mehrspieler können sich Spieler gegenseitig retten und Verwundete ziehen.
   Blut an der Einschussstelle, Blutlache, Verband nach dem Verarzten.
 - **Panzer besetzen:** Am eigenen Panzer E (Controller: R) halten. Erster Platz Fahrer und Richtschütze (fahren, Turm mit
