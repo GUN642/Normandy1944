@@ -1034,7 +1034,19 @@ class Game {
     on('p-menu', () => this.toMenu());
     on('p-help', () => { this.helpBack = 'pause'; this.showMenu('help'); });
     on('res-menu', () => this.toMenu());
-    on('set-back', () => { saveSettings(this.settings); this.showMenu(this.settingsBack || 'menu'); });
+    on('set-back', () => { saveSettings(this.settings); $('padtest').classList.add('hidden'); clearInterval(this._padT); this.showMenu(this.settingsBack || 'menu'); });
+    // Controller-Test: zeigt live, was der Controller meldet (für Fehlersuche, z. B. Foto an den Entwickler)
+    on('set-padtest', () => {
+      const el = $('padtest'); el.classList.toggle('hidden');
+      clearInterval(this._padT);
+      if (el.classList.contains('hidden')) return;
+      const upd = () => {
+        const d = this.input.gpDiag || {}, ids = Object.keys(d);
+        const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+        el.textContent = (ids.length ? ids.map((k) => { const q = d[k]; return `#${k} ${q.id}\nMapping: ${q.mapping}${q.joyR ? ' · Joy-Con (R)' : ''}\nAchsen: ${q.axes.join(' ')}\nRuhelage: ${q.rest.join(' ')}\nRechter Stick = Achse ${q.ri}/${q.rj} → Blick ${q.look.join(', ')} · Bewegen ${q.move.join(', ')}\nTasten gedrückt: ${q.btn.join(', ') || '–'}`; }).join('\n\n') : T('Kein Controller erkannt – eine Taste drücken.', 'No controller detected – press a button.')) + `\n\n${T('Verbundene Geräte', 'Connected devices')}: ${pads.length}`;
+      };
+      upd(); this._padT = setInterval(upd, 150);
+    });
     // Mehrspieler
     on('mp-host', () => {
       this.settings.name = $('mp-name').value.trim().slice(0, 16) || this.playerName(); saveSettings(this.settings);

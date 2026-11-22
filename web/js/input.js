@@ -200,7 +200,11 @@ export class Input {
       let ri = 2, rj = 3;
       if (gp.mapping !== 'standard' && ax.length >= 6 && (Math.abs(cal.rest[3]) > 0.3 || (cal.moved[5] > 0.35 && cal.moved[3] < 0.2))) rj = 5;
       if (gp.mapping !== 'standard' && ax.length >= 6 && Math.abs(cal.rest[2]) > 0.3 && Math.abs(cal.rest[3]) < 0.3) { ri = 3; rj = 5; }
-      const sx = A(0), sy = A(1), rx = A(ri), ry = A(rj);
+      // einzelner rechter Joy-Con (Android meldet beide Joy-Cons als eigene Geräte): sein Stick liegt auf 0/1 und ist der Blick-Stick
+      const joyR = /joy-?con\s*\(r\)|joy-?con\s+r\b|joy-?con\s*right/i.test(gp.id || '') && !/\(l\/r\)|pro controller/i.test(gp.id || '');
+      let sx = A(0), sy = A(1), rx = A(ri), ry = A(rj);
+      if (joyR) { rx = sx; ry = sy; sx = 0; sy = 0; }
+      (this.gpDiag || (this.gpDiag = {}))[gp.index] = { id: gp.id, mapping: gp.mapping || '-', axes: ax.map((v) => (v || 0).toFixed(2)), rest: cal.rest.map((v) => v.toFixed(1)), btn: gp.buttons.map((b, i) => (b.pressed || b.value > 0.4 ? i : -1)).filter((i) => i >= 0), ri, rj, joyR, look: [rx.toFixed(2), ry.toFixed(2)], move: [sx.toFixed(2), sy.toFixed(2)] };
       const any = Math.abs(sx) + Math.abs(sy) + Math.abs(rx) + Math.abs(ry) > 0.2 || gp.buttons.some((x) => x.pressed);
       if (any) { this.device = 'gamepad'; this.padT = performance.now(); document.body.classList.remove('touchmode'); }
       mx += sx; my += -sy;
@@ -230,7 +234,7 @@ export class Input {
         if (on(5)) G.add('use');
         if (btn(6) > 0.4) G.add('aim');
         if (btn(7) > 0.4) G.add('fire');
-        if (on(11)) G.add('prone');
+        if (on(11) || (joyR && on(10))) G.add('prone');   // Joy-Con (R) allein: Stickdruck kommt als Taste 10
         if (hy < 0) G.add('radio');
         if (hy > 0) G.add('heal');
         if (hx < 0) G.add('ptt');
@@ -239,7 +243,7 @@ export class Input {
       if (on(8)) G.add('score');
       if (on(9)) G.add('pause');
       // linken Stick drücken: Sprint umschalten (endet, wenn der Stick losgelassen wird)
-      if (on(10) && !prev[10]) this.padSprint = !this.padSprint;
+      if (!joyR && on(10) && !prev[10]) this.padSprint = !this.padSprint;
       if (Math.hypot(sx, sy) < 0.2) this.padSprint = false;
       if (this.padSprint) G.add('sprint');
       // Menüsteuerung: Stick, Steuerkreuz; bestätigen mit A oder B (beide unteren/rechten Tasten wie im Medevac-sim)
