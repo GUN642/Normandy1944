@@ -6,7 +6,7 @@ import { T } from './i18n.js';
 import { buildChute } from './models.js';
 import { tex, normalTex } from './gfx.js';
 
-const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
 // ------------------------------------------------------------ Ansichtsmodell (Waffe + Hände in eigener Szene)
 class ViewModel {
@@ -122,6 +122,8 @@ export class Player {
     this.stance = 0; this.ads = 0; this.speed = 0;
     this.stamina = 1; this.suppress = 0; this.bandages = 3; this.healing = 0;
     this.nextFire = 0; this.reloading = 0; this.boltT = 0; this.burstHeld = false;
+    // Laufhitze je Waffe (0 kalt … 1 überhitzt), Ersatzläufe des MG 42 (Laufwechsel), gestörte Waffe nach Überhitzung
+    this.heat = {}; this.spares = [0, 0]; this.jammed = {}; this.swapping = false;
     this.recoil = 0; this.recoilYaw = 0; this.recoilDebt = 0;
     this.onGround = true; this.inBoat = null; this.chute = null; this.climbing = false;
     this.lastShot = -10; this.charge = null; this.lastHurt = -10; this.downed = false; this.dragging = null; this.medic = null;
@@ -327,9 +329,25 @@ export class Player {
     // Zielen
     const wantAds = inp.held('aim') && !this.sprinting && !W.grenade && this.reloading <= 0 && !swim;
     this.ads = clamp(this.ads + (wantAds ? dt * 6 : -dt * 7), 0, 1);
-    // Nachladen
+    // Abkühlen (Läufe an der Waffe und die Ersatzläufe im Laufschützer)
+    for (const k in this.heat) {
+      const Wk = WEAPONS[k]; this.heat[k] = Math.max(0, this.heat[k] - dt * (Wk.cool || 0.05) * (k === this.wid && g.time - this.lastShot < 0.5 ? 0.2 : 1));
+      if (this.jammed[k] && this.heat[k] < 0.55) { this.jammed[k] = false; if (k === this.wid) g.hud.toast(T('Lauf abgekühlt – feuerbereit', 'Barrel cooled – ready')); }
+    }
+    for (let i = 0; i < this.spares.length; i++) this.spares[i] = Math.max(0, this.spares[i] - dt * 0.06);
+    // Nachladen bzw. Laufwechsel
     if (this.reloading > 0) {
       this.reloading -= dt;
+      if (this.reloading <= 0 && this.swapping) {
+        // heißen Lauf gegen den kühleren Ersatzlauf tauschen
+        this.swapping = false;
+        const i = this.spares[0] <= this.spares[1] ? 0 : 1;
+        const hot = this.heat[this.wid] || 0;
+        this.heat[this.wid] = this.spares[i]; this.spares[i] = hot; this.jammed[this.wid] = false;
+        g.audio.play('bolt', null, 0.5, 0.9);
+        g.hud.toast(T(`Lauf gewechselt (neuer Lauf ${Math.round(this.heat[this.wid] * 100)} % warm)`, `Barrel changed (new barrel ${Math.round(this.heat[this.wid] * 100)} % hot)`));
+        return;
+      }
       if (this.reloading <= 0) {
         const need = W.mag - A.mag;
         const take = W.enbloc ? Math.min(W.mag, A.res) : Math.min(need, A.res);
@@ -339,7 +357,9 @@ export class Player {
       }
       return;
     }
-    if (inp.pressed('reload') && !W.grenade && A.mag < W.mag && A.res > 0) this.startReload();
+    // MG 42: Nachladetaste bei heißem Lauf = Laufwechsel (bei leerem Gurt zuerst nachladen)
+    if (inp.pressed('reload') && W.barrel && (this.heat[this.wid] || 0) > 0.35 && (A.mag > 0 || A.res <= 0)) this.startBarrelSwap();
+    else if (inp.pressed('reload') && !W.grenade && A.mag < W.mag && A.res > 0) this.startReload();
     if (this.boltT > 0) { this.boltT -= dt; }
     // Verbinden
     if (inp.pressed('heal') && !g.medicContext && this.bandages > 0 && this.hp < 100 && this.healing <= 0) { this.bandages--; this.healing = 3; g.hud.toast(T('Verband angelegt', 'Bandage applied')); }
@@ -353,6 +373,11 @@ export class Player {
     if (!trig) { this.burstHeld = false; return; }
     if (g.time < this.nextFire || this.boltT > 0) return;
     if (!W.auto && this.burstHeld) return;
+    if (W.heat && this.jammed[this.wid]) {
+      if (!this.burstHeld) { g.audio.play('click', null, 0.5); g.hud.warn(W.barrel ? T('Lauf überhitzt! Laufwechsel: Nachladen-Taste', 'Barrel overheated! Change barrel: reload key') : T('Überhitzt – Waffe abkühlen lassen', 'Overheated – let the weapon cool')); }
+      this.burstHeld = true;
+      return;
+    }
     if (A.mag <= 0) {
       if (!this.burstHeld) g.audio.play('click', null, 0.5);
       this.burstHeld = true;
@@ -363,8 +388,15 @@ export class Player {
     this.burstHeld = true;
   }
 
+  startBarrelSwap() {
+    this.reloading = this.W.swap || 4; this.swapping = true; this.ads = 0;
+    this.g.audio.play('mag', null, 0.45, 0.8);
+    this.g.hud.toast(T('Laufwechsel …', 'Changing barrel …'));
+  }
+
   startReload() {
     const W = this.W;
+    this.swapping = false;
     if (W.enbloc && this.ammo[this.wid].mag > 0) this.g.hud.toast(T('Teilgeladenen Ladestreifen ausgeworfen', 'Ejected partial en-bloc clip'));
     if (W.enbloc) this.ammo[this.wid].mag = 0;
     // Ladestreifen (Kar98k): je fehlende Patrone etwas Zeit, max. volle Zeit
@@ -378,13 +410,23 @@ export class Player {
     const g = this.g, W = this.W, A = this.ammo[this.wid];
     A.mag--;
     g.stats.shots++;
+    // Laufhitze: Dauerfeuer erwärmt den Lauf; heiß streut die Waffe stärker und raucht, bei 100 % Störung
+    let hotK = 1;
+    if (W.heat) {
+      const h = this.heat[this.wid] = Math.min(1, (this.heat[this.wid] || 0) + W.heat);
+      hotK = 1 + Math.max(0, h - 0.6) * 2.5;
+      if (h > 0.75 && rand() < 0.15) { const mz = _w.copy(g.camera.position); g.camera.getWorldDirection(_d); mz.addScaledVector(_d, 1.0); g.effects.puff(mz.x, mz.y - 0.1, mz.z, { life: 1.4, s0: 0.1, s1: 0.6, a: 0.25, vy: 0.6, c: [0.8, 0.8, 0.78] }); }
+      if (h >= 1) { this.jammed[this.wid] = true; g.audio.play('click', null, 0.6, 0.7); g.hud.warn(W.barrel ? T('Lauf überhitzt! Laufwechsel: Nachladen-Taste', 'Barrel overheated! Change barrel: reload key') : T('Überhitzt – Waffe abkühlen lassen', 'Overheated – let the weapon cool')); }
+      else if (h > 0.8 && W.barrel && !this.hotWarn) { this.hotWarn = true; g.hud.toast(T('Lauf glüht – bald wechseln', 'Barrel glowing – change soon')); }
+      if (h < 0.5) this.hotWarn = false;
+    }
     this.nextFire = g.time + 60 / W.rpm;
     this.lastShot = g.time;
     const cam = g.camera;
     // Streuung: Hüfte/Kimme, Bewegung, Haltung, Schwanken
     const moveK = Math.min(1, this.speed / 3.5);
     const stK = this.stance === 2 ? 0.55 : this.stance === 1 ? 0.75 : 1;
-    let spread = (W.spread[0] * (1 - this.ads) + W.spread[1] * this.ads) * (1 + moveK * 1.5) * stK * (1 + this.suppress * 0.8) / 1000;
+    let spread = (W.spread[0] * (1 - this.ads) + W.spread[1] * this.ads) * (1 + moveK * 1.5) * stK * (1 + this.suppress * 0.8) * hotK / 1000;
     if (W.bipod && this.stance === 2) spread *= 0.5;
     cam.getWorldDirection(_d);
     _d.x += (rand() - 0.5) * spread * 2; _d.y += (rand() - 0.5) * spread * 2; _d.z += (rand() - 0.5) * spread * 2;

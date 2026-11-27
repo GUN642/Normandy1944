@@ -135,6 +135,11 @@ select, input[type=text], input:not([type]), #mp-name, #mp-code { font: 15px sys
 #hp-val { font: 700 16px var(--type); width: 34px; } #stance { font-size: 18px; } #w-band { color: #ff9a8a; font-weight: 700; }
 #weapon { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); text-align: right; background: rgba(20, 18, 14, 0.55); padding: 6px 12px; text-shadow: 0 1px 2px #000; }
 #w-name { font: 600 13px var(--type); color: var(--dim); } #w-ammo { font: 400 20px var(--type); } #w-ammo b { font-size: 30px; color: #fff; } #w-ammo i { font-size: 13px; color: #ffe08a; } #w-nade { font-size: 14px; color: var(--acc); }
+#w-ammo .heat { display: block; height: 4px; margin: 3px 0 0 auto; width: 90px; background: #0006; border-radius: 2px; overflow: hidden; }
+#w-ammo .heat i { display: block; height: 100%; background: linear-gradient(90deg, #d8c070, #e07a30); }
+#w-ammo .heat.hot i { background: #e85a20; }
+#w-ammo .heat.jam i { background: #ff2a10; animation: blink 0.5s infinite alternate; }
+@keyframes blink { to { opacity: 0.35; } }
 #padtest { background: #111a; color: #cfe; font: 12px/1.35 monospace; padding: 8px; margin: 6px 0; white-space: pre-wrap; max-height: 40vh; overflow: auto; text-align: left; }
 #scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, transparent 0, transparent calc(min(42vh, 42vw)), #000 calc(min(42vh, 42vw) + 2px)); }
 #scope.on { display: block; }

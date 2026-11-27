@@ -75,6 +75,60 @@ export class Missions {
 
   // ------------------------------------------------------------ Start
   // mode: 'campaign' | 'free' | 'coop' | 'versus'; humanSides: welche Seiten Menschen haben
+  // Verlassene, fahrbereite Panzer hinter der eigenen Linie (Besatzung ausgefallen/abgezogen) – frei nutzbar.
+  // US-Panzer nur dort, wo historisch schon Shermans im Einsatz waren; im Cotentin hatten die Deutschen Beutepanzer (H39).
+  placeAbandonedTanks(op) {
+    const g = this.g, W = g.world;
+    const usOk = ['utah', 'omaha', 'azeville', 'carentan', 'cherbourg', 'stlo', 'cobra', 'mortain', 'chambois'].includes(op.id);
+    const cotentin = ['drop', 'stmere', 'lafiere', 'utah', 'azeville', 'cherbourg'].includes(op.id);
+    const plan = { us: usOk ? (rand() < 0.5 ? 1 : 2) : 0, de: rand() < 0.4 ? 1 : 2 };
+    this.abandoned = [];
+    for (const side of ['us', 'de']) {
+      if (!plan[side]) continue;
+      // Ausgangspunkt: eigener Aufstellungsraum; bei Landungen das erste trockene Stück Richtung Ziel
+      let base = W.anchors[op[side].spawn] || null;
+      const firstObj = (op[side].objectives || []).map((o) => W.anchors[o.anchor]).find(Boolean);
+      if (!base) base = firstObj;
+      if (!base) continue;
+      base = base.clone();
+      if (W.waterDepth(base.x, base.z) > 0.2 || W.h(base.x, base.z) < 0.6) {
+        if (!firstObj) continue;
+        for (let k = 0; k <= 40; k++) { const p = base.clone().lerp(firstObj, k / 40); if (W.h(p.x, p.z) > 1.2 && !W.waterDepth(p.x, p.z)) { base = p; break; } }
+      }
+      const enemy = op[OTHER[side]] && W.anchors[op[OTHER[side]].spawn];
+      for (let n = 0; n < plan[side]; n++) {
+        let pos = null;
+        for (let tries = 0; tries < 120 && !pos; tries++) {
+          const a = rand() * Math.PI * 2, r = 18 + rand() * 60;
+          const x = base.x + Math.cos(a) * r, z = base.z + Math.sin(a) * r;
+          if (Math.abs(x) > 420 || Math.abs(z) > 420) continue;
+          const c = W.navCell(x, z);
+          if (!W.navFree(c[0], c[1]) || W.waterDepth(x, z) > 0 || W.h(x, z) < 0.8 || W.footprintAt(x, z, 5)) continue;
+          if (W.normal(x, z).y < 0.93) continue;
+          if (W.query(x, z, 4.5).some((b) => b.kind !== 'tree' && b.kind !== 'obstacle' && b.y1 > W.h(x, z) + 0.6)) continue;
+          if (g.units.tanks.some((t) => Math.hypot(t.pos.x - x, t.pos.z - z) < 12)) continue;
+          // deutlich auf der eigenen Seite (näher am eigenen Aufstellungsraum als am Feind, mit Abstand zu feindlichen Kräften)
+          if (enemy && Math.hypot(x - base.x, z - base.z) > 0.5 * Math.hypot(x - enemy.x, z - enemy.z)) continue;
+          if (g.units.list.some((u) => u.team !== side && Math.hypot(u.pos.x - x, u.pos.z - z) < 70)) continue;
+          pos = new THREE.Vector3(x, 0, z);
+        }
+        if (!pos) continue;
+        const type = side === 'us' ? 'sherman' : cotentin ? (rand() < 0.6 ? 'h39' : 'pz4') : (rand() < 0.5 ? 'pz4' : 'stug');
+        const yaw = enemy ? Math.atan2(-(enemy.x - pos.x), -(enemy.z - pos.z)) + (rand() - 0.5) * 0.8 : rand() * 6.28;
+        const t = g.units.spawnTank(type, side, pos, yaw, `abandoned_${side}_${n}`);
+        t.abandoned = true; t.hp *= 0.75 + rand() * 0.25;
+        this.abandoned.push(t);
+      }
+    }
+    // Hinweis über Funk, sobald die Mission läuft
+    const mine = this.abandoned.filter((t) => t.team === g.player.team);
+    if (mine.length) setTimeout(() => {
+      if (!g.world || !mine[0].alive) return;
+      const t = mine[0], d = Math.round(t.pos.distanceTo(g.player.pos)), b = Math.round(((Math.atan2(t.pos.x - g.player.pos.x, -(t.pos.z - g.player.pos.z)) * 180 / Math.PI) + 360) % 360);
+      g.radio(T(`Verlassener ${t.spec.name} gemeldet – ${d} m, Richtung ${b}°. Fahrbereit, Besatzung fehlt. Auf der Karte markiert.`, `Abandoned ${t.spec.name} reported – ${d} m, bearing ${b}°. Runs, no crew. Marked on the map.`), T('Gefechtsstand', 'Command post'));
+    }, 9000);
+  }
+
   start(op, mode, opts = {}) {
     const g = this.g;
     this.op = op;
@@ -97,6 +151,7 @@ export class Missions {
       if (def.wave) this.waves.push({ side, def, t: def.wave, done: false });
       else this.spawnDef(side, def, scale);
     }
+    this.placeAbandonedTanks(op);
     // Zusätzliche Scharfschützen (Atmosphäre: Scharfschützenbeschuss)
     const sn = op.ambient.sniper || 0;
     for (let i = 0; i < sn; i++) this.extraSniper('de');

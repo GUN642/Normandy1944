@@ -214,8 +214,13 @@ export class Crew {
     const W = t.team === 'us' ? WEAPONS.bar : WEAPONS.mg42;
     const rate = t.team === 'us' ? 0.11 : 0.055;
     t.mgT = (t.mgT || 0) - dt;
+    t.mgHeat = Math.max(0, (t.mgHeat || 0) - dt * 0.07);
+    if (t.mgJam && t.mgHeat < 0.5) { t.mgJam = false; g.hud.toast(T('MG abgekühlt', 'MG cooled down')); }
     if (!inp.held('fire') || t.mgT > 0) return;
+    if (t.mgJam) { if (inp.pressed('fire')) { g.audio.play('click', null, 0.5); g.hud.warn(T('MG überhitzt – abkühlen lassen', 'MG overheated – let it cool')); } return; }
     t.mgT = rate;
+    t.mgHeat += t.team === 'us' ? 1 / 160 : 1 / 260;
+    if (t.mgHeat >= 1) { t.mgJam = true; g.hud.warn(T('MG überhitzt – abkühlen lassen', 'MG overheated – let it cool')); }
     const o = this.mgPos(t, new THREE.Vector3());
     g.camera.getWorldDirection(_d);
     _d.x += (rand() - 0.5) * 0.012; _d.y += (rand() - 0.5) * 0.008; _d.z += (rand() - 0.5) * 0.012; _d.normalize();
@@ -274,7 +279,7 @@ export class Crew {
     if (!t) return null;
     const hp = Math.max(0, Math.round((t.hp / t.spec.hp) * 100));
     if (p.seat === 0) return { name: t.spec.name + ' · ' + T('Kanone', 'main gun'), ammo: (t.reload > 0 ? `<i>${T('lädt', 'loading')} ${t.reload.toFixed(1)} s</i>` : `<b>${T('BEREIT', 'READY')}</b>`) + ` · ${T('Panzer', 'hull')} ${hp} %` };
-    return { name: t.spec.name + ' · ' + (t.team === 'us' ? 'Browning M2' : 'MG 34'), ammo: `<b>∞</b> · ${T('Panzer', 'hull')} ${hp} %` };
+    return { name: t.spec.name + ' · ' + (t.team === 'us' ? 'Browning M2' : 'MG 34'), ammo: `<b>∞</b> · ${T('Panzer', 'hull')} ${hp} %` + `<span class="heat${t.mgJam ? ' jam' : (t.mgHeat || 0) > 0.75 ? ' hot' : ''}"><i style="width:${Math.round((t.mgHeat || 0) * 100)}%"></i></span>` };
   }
 }
 

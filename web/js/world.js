@@ -6,7 +6,7 @@ import { MAPS } from './maps.js';
 import { tex, normalTex, mergeColored, M4 } from './gfx.js';
 import {
   initMaterials, MAT, buildHouse, buildChurch, buildBunker, buildSandbags, buildRuin, buildGun,
-  hedgehogGeo, stakeGeo, wireGeo, buildFlagpole, isPBR,
+  hedgehogGeo, stakeGeo, wireGeo, buildFlagpole, isPBR, buildTank,
 } from './models.js';
 
 export const SIZE = 900, HALF = 450;
@@ -608,9 +608,15 @@ export class World {
           break;
         }
         case 'wreck': {
-          const m = new THREE.Mesh(new THREE.BoxGeometry(4, 1.6, 2.2), new THREE.MeshLambertMaterial({ color: 0x2a2622 }));
-          m.position.set(f.x, y + 0.8, f.z); m.rotation.y = 0.4; m.castShadow = true; this.group.add(m);
-          this.addBox({ x: f.x, z: f.z, hw: 2, hd: 1.1, rot: 0.4, y0: y - 1, y1: y + 1.6, kind: 'wall' });
+          // ausgebranntes Fahrzeug: Panzermodell, verrußt, Turm verdreht, Rohr gesenkt, leicht schief
+          const kind = f.kind || (rng() < 0.5 ? 'pz4' : 'sherman');
+          const tk = buildTank(kind), ry = f.ry ?? rng() * 6.28;
+          tk.root.traverse((o) => { if (o.isMesh) o.material = MAT.burnt; });
+          tk.turret.rotation.y = (rng() - 0.5) * 2; tk.gun.rotation.x = -0.12;
+          tk.root.position.set(f.x, y - 0.15, f.z); tk.root.rotation.set((rng() - 0.5) * 0.08, ry, (rng() - 0.5) * 0.1);
+          this.group.add(tk.root);
+          const S = tk.spec;
+          this.addBox({ x: f.x, z: f.z, hw: S.wid / 2, hd: S.len / 2, rot: ry, y0: y - 1, y1: y + S.hgt + 0.6, kind: 'wall' });
           break;
         }
       }

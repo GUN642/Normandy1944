@@ -12,7 +12,7 @@ const NAMES = {
   us: ['Miller', 'Jackson', 'Kowalski', 'Brennan', 'Russo', 'Taylor', 'Hughes', 'Ortiz', 'Walsh', 'Carter', 'Nolan', 'Fischer', 'Reed', 'Doyle', 'Parker', 'Lopez', 'Grant', 'Kelly', 'Murphy', 'Bauer', 'Wright', 'Hayes', 'Price', 'Sullivan'],
   de: ['Becker', 'Hofmann', 'Wagner', 'Krüger', 'Schulz', 'Lange', 'Vogel', 'Brandt', 'Keller', 'Huber', 'Seidel', 'Franke', 'Lorenz', 'Peters', 'Winter', 'Roth', 'Kraus', 'Engel', 'Böhm', 'Graf', 'Kuhn', 'Pohl', 'Arnold', 'Simon'],
 };
-const UNI = { utah: { us: 'us_inf', de: 'de_heer' }, cobra: { us: 'us_inf', de: 'de_heer' }, chambois: { us: 'us_inf', de: 'de_fj' }, drop: { us: 'us_para', de: 'de_heer' }, stmere: { us: 'us_para', de: 'de_heer' }, omaha: { us: 'us_inf', de: 'de_heer' }, pointe: { us: 'us_ranger', de: 'de_heer' }, brecourt: { us: 'us_para', de: 'de_heer' }, lafiere: { us: 'us_para', de: 'de_heer' }, carentan: { us: 'us_para', de: 'de_fj' }, stlo: { us: 'us_inf', de: 'de_fj' } };
+const UNI = { azeville: { us: 'us_inf', de: 'de_heer' }, cherbourg: { us: 'us_inf', de: 'de_heer' }, mortain: { us: 'us_inf', de: 'de_heer' }, utah: { us: 'us_inf', de: 'de_heer' }, cobra: { us: 'us_inf', de: 'de_heer' }, chambois: { us: 'us_inf', de: 'de_fj' }, drop: { us: 'us_para', de: 'de_heer' }, stmere: { us: 'us_para', de: 'de_heer' }, omaha: { us: 'us_inf', de: 'de_heer' }, pointe: { us: 'us_ranger', de: 'de_heer' }, brecourt: { us: 'us_para', de: 'de_heer' }, lafiere: { us: 'us_para', de: 'de_heer' }, carentan: { us: 'us_para', de: 'de_fj' }, stlo: { us: 'us_inf', de: 'de_fj' } };
 export const uniformFor = (opId, team) => (UNI[opId] || UNI.omaha)[team];
 
 // Waffe je Rolle
@@ -138,6 +138,9 @@ export class Units {
     this.byId.set(u.uid, u);
     return u;
   }
+
+  // verlassener Panzer ohne Besatzung: steht nur da, wird von der KI nicht beachtet
+  emptyTank(t) { return !!t.abandoned && !(t.crew && (t.crew[0] !== null || t.crew[1] !== null)); }
 
   spawnTank(type, team, pos, yaw, id) {
     const t = new Tank(this, type, team, pos, yaw, id);
@@ -717,7 +720,7 @@ export class Units {
 
   nearestTank(u, r) {
     let best = null, bd = r;
-    for (const t of this.tanks) if (t.alive && t.team !== u.team) { const d = t.pos.distanceTo(u.pos); if (d < bd) { bd = d; best = t; } }
+    for (const t of this.tanks) if (t.alive && t.team !== u.team && !this.emptyTank(t)) { const d = t.pos.distanceTo(u.pos); if (d < bd) { bd = d; best = t; } }
     return best;
   }
 
@@ -741,6 +744,11 @@ export class Units {
     if (!t.alive) return;
     // von Spielern besetzt: Sitz 0 fährt und richtet selbst, Sitz 1 bedient das MG
     const drv = !!(t.crew && t.crew[0] !== null), mgH = !!(t.crew && t.crew[1] !== null);
+    if (t.abandoned && !drv && !mgH) {   // leer: nur am Boden halten
+      t.pos.y = W.groundAt(t.pos.x, t.pos.z, t.pos.y + 1); m.root.position.copy(t.pos); m.root.rotation.y = t.yaw;
+      const n0 = W.normal(t.pos.x, t.pos.z, _v); m.root.rotation.x = Math.atan2(-(n0.x * -Math.sin(t.yaw) + n0.z * -Math.cos(t.yaw)), n0.y) * 0.8;
+      t.moving = false; return;
+    }
     // Fahren
     let moving = drv ? !!t.moving : false;
     if (!drv && t.path && t.pathI < t.path.length) {
@@ -777,20 +785,20 @@ export class Units {
         const d = e.pos.distanceTo(t.pos);
         if (d < bd && W.los(eye, _w.set(e.pos.x, e.pos.y + 1, e.pos.z))) { bd = d; best = e; }
       }
-      for (const e of this.tanks) if (e.alive && e.team !== t.team) { const d = e.pos.distanceTo(t.pos); if (d < 400 && d < bd + 100) { best = e; bd = d; } }
+      for (const e of this.tanks) if (e.alive && e.team !== t.team && !this.emptyTank(e)) { const d = e.pos.distanceTo(t.pos); if (d < 400 && d < bd + 100) { best = e; bd = d; } }
       t.target = best;
     }
     if (t.target && (t.target.alive)) {
       const dx = t.target.pos.x - t.pos.x, dz = t.target.pos.z - t.pos.z;
       const want = wrapAngle(Math.atan2(-dx, -dz) - t.yaw);
-      if (drv) { /* Turm richtet der Spieler */ }
+      if (drv || t.abandoned) { /* Turm richtet der Spieler */ }
       else if (t.spec.casemate) { t.yaw += clamp(want, -0.3 * dt, 0.3 * dt); }
       else t.turretYaw += clamp(wrapAngle(want - t.turretYaw), -0.6 * dt, 0.6 * dt);
       if (!drv) m.turret.rotation.y = t.spec.casemate ? 0 : t.turretYaw;
       const aimErr = Math.abs(wrapAngle((t.spec.casemate ? 0 : t.turretYaw) - want));
       t.nextFire -= dt;
       const d = Math.hypot(dx, dz);
-      if (!drv && t.nextFire <= 0 && aimErr < 0.06) {
+      if (!drv && !t.abandoned && t.nextFire <= 0 && aimErr < 0.06) {
         t.nextFire = 6 + rand() * 4;
         this.tankFire(t, d);
       }

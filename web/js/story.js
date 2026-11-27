@@ -629,12 +629,190 @@ export const OPERATIONS = [
       { t: 90, from: { de: 'Verbindungsoffizier', en: 'Liaison officer' }, side: 'us', text: { de: 'Polnische Panzer auf Höhe 262 bei Mont-Ormel halten die Straße nach Vimoutiers.', en: 'Polish armour on Hill 262 at Mont-Ormel is holding the road to Vimoutiers.' } },
     ],
   },
+  // ------------------------------------------------------------------ Batterie Azeville
+  {
+    id: 'azeville', map: 'azeville', date: { de: '9. Juni 1944', en: '9 June 1944' }, time: '14:00', tod: 14, weather: 'clear_morning',
+    title: { de: 'Die Batterie von Azeville', en: 'The Azeville Battery' },
+    place: { de: 'Azeville, nordwestlich von Utah Beach', en: 'Azeville, north-west of Utah Beach' },
+    history: {
+      de: 'Hinter Utah Beach liegen die Batterien Crisbecq und Azeville: vier Kasematten aus Stahlbeton, verbunden durch Gräben und Gänge, umgeben von Stacheldraht und Minen. Seit dem 6. Juni beschießen sie den Strand. Zwei Angriffe des 22. Infanterieregiments scheitern. Am 9. Juni greift das 3. Bataillon erneut an – mit Sprengladungen, Bazookas und Flammenwerfern; ein einzelner Schuss des Flammenwerfers in eine offene Tür führt schließlich zur Kapitulation der Besatzung.',
+      en: 'Behind Utah Beach lie the Crisbecq and Azeville batteries: four reinforced-concrete casemates linked by trenches and tunnels, ringed by barbed wire and mines. Since 6 June they have been shelling the beach. Two attacks by the 22nd Infantry Regiment fail. On 9 June the 3rd Battalion attacks again – with demolition charges, bazookas and flamethrowers; a single flamethrower burst through an open door finally makes the garrison surrender.',
+    },
+    us: {
+      unit: { de: '3. Bataillon, 22. Infanterieregiment, 4. Infanteriedivision', en: '3rd Battalion, 22nd Infantry Regiment, 4th Infantry Division' },
+      briefing: {
+        de: 'Die Batterie feuert noch immer auf den Strand. Gehen Sie von Südosten durch die Hecken vor, schneiden Sie den Draht, schalten Sie die beiden MG-Nester am Graben aus und sprengen Sie alle vier Kasematten. Die Flak der Batterie schießt im Erdeinsatz – Deckung nutzen!',
+        en: 'The battery is still firing on the beach. Advance from the south-east through the hedgerows, breach the wire, knock out the two MG nests at the trench and blow all four casemates. The battery\'s flak is firing at ground targets – use cover!',
+      },
+      spawn: 'usStart',
+      objectives: [
+        { type: 'reach', anchor: 'wire', r: 45, text: { de: 'An den Drahtgürtel heran', en: 'Close in on the wire belt' } },
+        { type: 'destroy', targets: ['mg1', 'mg2'], text: { de: 'MG-Nester am Graben ausschalten', en: 'Knock out the MG nests at the trench' } },
+        { type: 'destroy', targets: ['az1', 'az2', 'az3', 'az4'], text: { de: 'Alle vier Kasematten sprengen (E)', en: 'Blow all four casemates (E)' } },
+        { type: 'clear', anchor: 'battery', r: 80, left: 1, text: { de: 'Batteriegelände säubern', en: 'Clear the battery position' } },
+      ],
+    },
+    de: {
+      unit: { de: '2. Batterie, Artillerie-Regiment 1261', en: '2nd Battery, Artillery Regiment 1261' },
+      briefing: {
+        de: 'Die Batterie ist seit drei Tagen eingeschlossen und feuert weiter auf den Strand. Halten Sie Graben und Kasematten gegen den Angriff aus Südosten. Ein Stoßtrupp aus dem Dorf Azeville kommt zur Unterstützung.',
+        en: 'The battery has been cut off for three days and keeps firing on the beach. Hold the trench and casemates against the attack from the south-east. An assault squad from Azeville village is coming to help.',
+      },
+      spawn: 'battery',
+      objectives: [
+        { type: 'defend', anchor: 'battery', r: 90, time: 360, text: { de: 'Batterie halten', en: 'Hold the battery' } },
+        { type: 'kill', n: 25, text: { de: 'Angriff zerschlagen (25 Gegner)', en: 'Break the attack (25 enemies)' } },
+      ],
+    },
+    forces: {
+      us: [
+        { anchor: 'usStart', n: 8, order: 'attack', target: 'wire', roles: ['rifle', 'rifle', 'smg', 'mg', 'rifle', 'at', 'officer', 'rifle'] },
+        { anchor: 'usStart2', n: 8, order: 'attack', target: 'wire', roles: ['rifle', 'smg', 'rifle', 'mg', 'rifle', 'at', 'rifle', 'rifle'] },
+        { anchor: 'usStart', n: 8, order: 'attack', target: 'battery', wave: 110, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'at', 'rifle', 'rifle', 'officer'] },
+        { anchor: 'usStart2', n: 8, order: 'attack', target: 'battery', wave: 260, roles: ['rifle', 'smg', 'assault', 'rifle', 'at', 'rifle', 'mg', 'rifle'] },
+      ],
+      de: [
+        { anchor: 'mg1', n: 2, order: 'static', roles: ['mg', 'rifle'] },
+        { anchor: 'mg2', n: 2, order: 'static', roles: ['mg', 'rifle'] },
+        { anchor: 'az1', n: 2, order: 'static', roles: ['rifle', 'rifle'] },
+        { anchor: 'az2', n: 2, order: 'static', roles: ['rifle', 'smg'] },
+        { anchor: 'az3', n: 2, order: 'static', roles: ['rifle', 'rifle'] },
+        { anchor: 'az4', n: 2, order: 'static', roles: ['smg', 'rifle'] },
+        { anchor: 'battery', n: 5, order: 'hold', roles: ['rifle', 'mg', 'rifle', 'officer', 'smg'] },
+        { anchor: 'village', n: 5, order: 'attack', target: 'battery', wave: 240, roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle'] },
+      ],
+    },
+    ambient: { naval: true, planes: 'p47', arty: 0.6, mortars: true, sniper: 1, battery: true },
+    events: [
+      { t: 3, from: { de: 'Hauptmann', en: 'Captain' }, side: 'us', text: { de: 'Zweimal sind wir schon abgeprallt. Diesmal kommen wir mit Sprengladungen bis an die Türen.', en: 'We\'ve bounced off twice. This time we take the charges right up to their doors.' } },
+      { t: 3, from: { de: 'Batteriechef', en: 'Battery commander' }, side: 'de', text: { de: 'Sie kommen wieder. Alle Mann an den Graben, die Flak schießt waagerecht!', en: 'They\'re coming again. Everyone to the trench, the flak fires level!' } },
+      { t: 70, from: { de: 'Feuerleitoffizier', en: 'Fire control officer' }, side: 'us', text: { de: 'USS Nevada feuert auf Azeville – Kopf runter!', en: 'USS Nevada is firing on Azeville – heads down!' } },
+      { t: 200, from: { de: 'Melder', en: 'Runner' }, side: 'de', text: { de: 'Stoßtrupp aus dem Dorf ist unterwegs!', en: 'The assault squad from the village is on its way!' } },
+    ],
+  },
+
+  // ------------------------------------------------------------------ Cherbourg
+  {
+    id: 'cherbourg', map: 'cherbourg', date: { de: '25. Juni 1944', en: '25 June 1944' }, time: '13:00', tod: 13, weather: 'overcast',
+    title: { de: 'Cherbourg – Fort du Roule', en: 'Cherbourg – Fort du Roule' },
+    place: { de: 'Montagne du Roule über Cherbourg', en: 'Montagne du Roule above Cherbourg' },
+    history: {
+      de: 'Ohne Hafen kann die Invasion nicht versorgt werden. Ende Juni stoßen drei amerikanische Divisionen auf Cherbourg vor. Über der Stadt liegt das Fort du Roule mit Kasematten im Fels. Am 25. Juni arbeiten sich Soldaten der 79. Infanteriedivision den Südhang hinauf; Korporal John D. Kelly und Leutnant Carlos Ogden schalten mit Sprengladungen und Gewehrgranaten mehrere Bunker aus (beide erhalten die Medal of Honor). Am 26. Juni kapituliert General von Schlieben, die Hafenanlagen sind jedoch gründlich zerstört.',
+      en: 'Without a port the invasion cannot be supplied. In late June three American divisions push on Cherbourg. Above the city stands Fort du Roule with casemates cut into the rock. On 25 June soldiers of the 79th Infantry Division work their way up the southern slope; Corporal John D. Kelly and Lieutenant Carlos Ogden knock out several bunkers with pole charges and rifle grenades (both receive the Medal of Honor). On 26 June General von Schlieben surrenders, but the harbour has been thoroughly wrecked.',
+    },
+    us: {
+      unit: { de: '314. Infanterieregiment, 79. Infanteriedivision', en: '314th Infantry Regiment, 79th Infantry Division' },
+      briefing: {
+        de: 'Das Fort beherrscht die Stadt und den Hafen. Arbeiten Sie sich den Südhang hinauf, sprengen Sie die beiden Bunker vor dem Fort, hissen Sie die Flagge auf dem Fort und kämpfen Sie sich dann durch die Straßen bis zum Platz in der Stadt.',
+        en: 'The fort dominates the city and the harbour. Work your way up the southern slope, blow the two bunkers in front of the fort, raise the flag over the fort and then fight through the streets to the square in the city.',
+      },
+      spawn: 'usStart',
+      objectives: [
+        { type: 'reach', anchor: 'slope', r: 35, text: { de: 'Südhang des Roule erreichen', en: 'Reach the southern slope of the Roule' } },
+        { type: 'destroy', targets: ['fort1', 'fort2'], text: { de: 'Bunker vor dem Fort sprengen (E)', en: 'Blow the bunkers in front of the fort (E)' } },
+        { type: 'flag', anchor: 'fortflag', text: { de: 'Flagge auf dem Fort hissen (E)', en: 'Raise the flag over the fort (E)' } },
+        { type: 'clear', anchor: 'city', r: 60, left: 1, text: { de: 'Häuserkampf bis zum Platz', en: 'Street fighting to the square' } },
+      ],
+    },
+    de: {
+      unit: { de: 'Kampfgruppe der 709. Infanteriedivision', en: 'Battle group of the 709th Infantry Division' },
+      briefing: {
+        de: 'Cherbourg soll „bis zur letzten Patrone“ gehalten werden. Verteidigen Sie das Fort du Roule gegen den Angriff von Süden und ziehen Sie sich danach in die Stadt zurück. Halten Sie den Platz, solange die Sprengkommandos im Hafen arbeiten.',
+        en: 'Cherbourg is to be held "to the last round". Defend Fort du Roule against the attack from the south, then fall back into the city. Hold the square while the demolition teams work in the harbour.',
+      },
+      spawn: 'fort',
+      objectives: [
+        { type: 'defend', anchor: 'fort', r: 80, time: 420, text: { de: 'Fort du Roule halten', en: 'Hold Fort du Roule' } },
+        { type: 'defend', anchor: 'city', r: 70, time: 300, text: { de: 'Platz in der Stadt halten', en: 'Hold the city square' } },
+      ],
+    },
+    forces: {
+      us: [
+        { anchor: 'usStart', n: 8, order: 'attack', target: 'slope', roles: ['rifle', 'rifle', 'smg', 'mg', 'rifle', 'at', 'officer', 'rifle'] },
+        { anchor: 'usStart', n: 6, order: 'attack', target: 'fort', wave: 60, roles: ['rifle', 'assault', 'smg', 'rifle', 'mg', 'rifle'] },
+        { anchor: 'usStart2', n: 8, order: 'attack', target: 'fort', roles: ['rifle', 'smg', 'rifle', 'mg', 'assault', 'at', 'rifle', 'rifle'] },
+        { anchor: 'usStart', n: 8, order: 'attack', target: 'fort', wave: 130, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'at', 'rifle', 'rifle', 'officer'] },
+        { anchor: 'usStart2', n: 8, order: 'attack', target: 'fort', wave: 300, roles: ['rifle', 'smg', 'assault', 'rifle', 'mg', 'rifle', 'smg', 'rifle'] },
+      ],
+      de: [
+        { anchor: 'fort1', n: 2, order: 'static', roles: ['mg', 'rifle'] },
+        { anchor: 'fort2', n: 2, order: 'static', roles: ['rifle', 'mg'] },
+        { anchor: 'fort', n: 4, order: 'hold', roles: ['rifle', 'mg', 'smg', 'officer'] },
+        { anchor: 'city', n: 6, order: 'hold', roles: ['rifle', 'mg', 'smg', 'rifle', 'at', 'sniper'] },
+        { anchor: 'deRear', n: 4, order: 'attack', target: 'fort', wave: 260, roles: ['rifle', 'assault', 'rifle', 'mg'] },
+      ],
+    },
+    ambient: { planes: 'p47', arty: 0.8, mortars: true, sniper: 1 },
+    events: [
+      { t: 3, from: { de: 'Kompaniechef', en: 'Company commander' }, side: 'us', text: { de: 'Das Fort sieht auf jeden Meter herunter. Von Hecke zu Hecke, und die Sprengladungen nach vorn!', en: 'The fort looks down on every yard. Hedge by hedge, and get the charges forward!' } },
+      { t: 3, from: { de: 'Festungskommandant', en: 'Fortress commander' }, side: 'de', text: { de: 'Der Befehl lautet: halten bis zur letzten Patrone. Die Pioniere sprengen im Hafen.', en: 'The order is: hold to the last round. The engineers are blowing up the harbour.' } },
+      { t: 120, from: { de: 'Artillerie', en: 'Artillery' }, side: 'us', text: { de: 'Feuer auf den Kamm liegt. Jetzt hoch!', en: 'Fire is on the crest. Go up now!' } },
+    ],
+  },
+
+  // ------------------------------------------------------------------ Mortain
+  {
+    id: 'mortain', map: 'mortain', date: { de: '7. August 1944', en: '7 August 1944' }, time: '09:00', tod: 9, weather: 'dawn_mist',
+    title: { de: 'Mortain – Saint-Barthélemy', en: 'Mortain – Saint-Barthélemy' },
+    place: { de: 'Saint-Barthélemy bei Mortain', en: 'Saint-Barthélemy near Mortain' },
+    history: {
+      de: 'In der Nacht zum 7. August beginnt das „Unternehmen Lüttich“: Panzerdivisionen sollen von Mortain nach Westen bis Avranches stoßen und die durchgebrochenen Amerikaner abschneiden. Im dichten Morgennebel rollen Panzer der 2. Panzer-Division durch Saint-Barthélemy, verteidigt vom 1. Bataillon des 117. Infanterieregiments. Auf der nahen Höhe 314 hält sich ein eingeschlossenes Bataillon sechs Tage lang. Gegen Mittag lichtet sich der Nebel – Jagdbomber greifen die Kolonnen an, der Vorstoß bleibt liegen.',
+      en: 'In the night to 7 August "Operation Lüttich" begins: panzer divisions are to strike west from Mortain to Avranches and cut off the Americans who have broken through. In thick morning fog tanks of the 2nd Panzer Division roll through Saint-Barthélemy, held by the 1st Battalion, 117th Infantry Regiment. On nearby Hill 314 a surrounded battalion holds out for six days. Around noon the fog lifts – fighter-bombers attack the columns and the thrust bogs down.',
+    },
+    us: {
+      unit: { de: '1. Bataillon, 117. Infanterieregiment, 30. Infanteriedivision', en: '1st Battalion, 117th Infantry Regiment, 30th Infantry Division' },
+      briefing: {
+        de: 'Panzer im Nebel, von Osten. Halten Sie Saint-Barthélemy, vernichten Sie die Panzer mit Bazookas – lassen Sie sie in den Ort, die Gassen sind eng. Wenn der Nebel aufreißt, kommen die Jagdbomber. Danach die Kreuzung halten.',
+        en: 'Tanks in the fog, from the east. Hold Saint-Barthélemy and destroy the tanks with bazookas – let them into the village, the lanes are narrow. When the fog lifts the fighter-bombers will come. Then hold the crossroads.',
+      },
+      spawn: 'village',
+      objectives: [
+        { type: 'defend', anchor: 'village', r: 80, time: 300, text: { de: 'Saint-Barthélemy halten', en: 'Hold Saint-Barthélemy' } },
+        { type: 'destroy', targets: ['pzA', 'pzB'], text: { de: 'Panzer vernichten (Bazooka, Luftangriff)', en: 'Destroy the tanks (bazooka, air strike)' } },
+        { type: 'defend', anchor: 'crossroads', r: 60, time: 180, text: { de: 'Kreuzung halten', en: 'Hold the crossroads' } },
+      ],
+    },
+    de: {
+      unit: { de: 'Panzergrenadier-Regiment 304, 2. Panzer-Division', en: 'Panzergrenadier Regiment 304, 2nd Panzer Division' },
+      briefing: {
+        de: 'Der Nebel ist unser Schutz vor den Jagdbombern. Stoßen Sie mit den Panzern durch Saint-Barthélemy nach Westen vor, säubern Sie den Ort und erreichen Sie den Westausgang, bevor sich der Nebel lichtet.',
+        en: 'The fog is our cover from the fighter-bombers. Push west through Saint-Barthélemy with the tanks, clear the village and reach the western exit before the fog lifts.',
+      },
+      spawn: 'deStart',
+      objectives: [
+        { type: 'reach', anchor: 'eastEntry', r: 30, text: { de: 'Ostrand des Ortes erreichen', en: 'Reach the eastern edge of the village' } },
+        { type: 'clear', anchor: 'village', r: 70, left: 1, text: { de: 'Saint-Barthélemy säubern', en: 'Clear Saint-Barthélemy' } },
+        { type: 'reach', anchor: 'westExit', r: 35, text: { de: 'Westausgang erreichen', en: 'Reach the western exit' } },
+      ],
+    },
+    forces: {
+      us: [
+        { anchor: 'village', n: 9, order: 'hold', roles: ['rifle', 'mg', 'at', 'rifle', 'officer', 'rifle', 'at', 'smg', 'rifle'] },
+        { anchor: 'crossroads', n: 4, order: 'hold', roles: ['rifle', 'at', 'mg', 'rifle'] },
+        { anchor: 'eastEntry', n: 5, order: 'hold', roles: ['rifle', 'mg', 'at', 'rifle', 'rifle'] },
+        { anchor: 'crossroads', n: 5, order: 'hold', roles: ['rifle', 'smg', 'rifle', 'at', 'mg'] },
+        { anchor: 'usReserve', n: 8, order: 'attack', target: 'village', wave: 170, tank: 'sherman', roles: ['rifle', 'smg', 'rifle', 'mg', 'at', 'rifle', 'rifle', 'officer'] },
+      ],
+      de: [
+        { anchor: 'deStart', n: 7, order: 'attack', target: 'eastEntry', tank: 'pz4', tankId: 'pzA', roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle', 'smg', 'officer'] },
+        { anchor: 'deStart2', n: 6, order: 'attack', target: 'village', wave: 150, tank: 'pz4', tankId: 'pzB', roles: ['rifle', 'assault', 'rifle', 'mg', 'rifle', 'smg', 'rifle'] },
+        { anchor: 'deStart', n: 7, order: 'attack', target: 'village', wave: 280, roles: ['rifle', 'assault', 'rifle', 'mg', 'smg', 'rifle', 'rifle'] },
+      ],
+    },
+    ambient: { planes: 'p47', arty: 0.6, mortars: true, sniper: 0 },
+    events: [
+      { t: 3, from: { de: 'Bataillon', en: 'Battalion' }, side: 'us', text: { de: 'Motorengeräusche im Nebel, Richtung Osten. Panzer! Bazookas an die Straße!', en: 'Engine noise in the fog, to the east. Tanks! Bazookas to the road!' } },
+      { t: 3, from: { de: 'Abteilungskommandeur', en: 'Battalion commander' }, side: 'de', text: { de: 'Solange der Nebel hält, sind wir sicher vor den Jabos. Vorwärts!', en: 'As long as the fog holds we are safe from the fighter-bombers. Forward!' } },
+      { t: 210, from: { de: 'Fliegerleitoffizier', en: 'Air liaison' }, side: 'us', text: { de: 'Der Nebel reißt auf! Typhoons und Thunderbolts im Anflug – Ziele markieren!', en: 'The fog is lifting! Typhoons and Thunderbolts inbound – mark the targets!' } },
+      { t: 210, from: { de: 'Beobachter', en: 'Observer' }, side: 'de', text: { de: 'Jabos! Volle Deckung, Panzer in die Hecken!', en: 'Fighter-bombers! Take cover, tanks into the hedges!' } },
+    ],
+  },
 ];
 
 // Kampagnenreihenfolge je Seite (historisch, aus Sicht der jeweiligen Seite)
 export const CAMPAIGN = {
-  us: ['drop', 'stmere', 'utah', 'omaha', 'pointe', 'brecourt', 'lafiere', 'carentan', 'stlo', 'cobra', 'chambois'],
-  de: ['drop', 'utah', 'omaha', 'pointe', 'brecourt', 'stmere', 'lafiere', 'carentan', 'stlo', 'cobra', 'chambois'],
+  us: ['drop', 'stmere', 'utah', 'omaha', 'pointe', 'brecourt', 'lafiere', 'azeville', 'carentan', 'cherbourg', 'stlo', 'cobra', 'mortain', 'chambois'],
+  de: ['drop', 'utah', 'omaha', 'pointe', 'brecourt', 'stmere', 'lafiere', 'azeville', 'carentan', 'cherbourg', 'stlo', 'cobra', 'mortain', 'chambois'],
 };
 
 // Zwischentexte der Kampagne (nach erfolgreicher Mission)
@@ -650,6 +828,9 @@ export const EPILOGUE = {
     stlo: { de: 'Am 18. Juli fällt Saint-Lô. Eine Woche später beginnt mit Operation Cobra der Ausbruch aus der Normandie.', en: 'Saint-Lô falls on 18 July. A week later Operation Cobra begins the breakout from Normandy.' },
     utah: { de: 'Bis zum Abend sind 23.000 Mann an Land. Bei Pouppeville trifft die 4. Infanteriedivision auf die Fallschirmjäger der 101.', en: 'By evening 23,000 men are ashore. At Pouppeville the 4th Infantry Division links up with the 101st Airborne.' },
     cobra: { de: 'Marigny fällt, die Front bricht auf. Binnen einer Woche stoßen amerikanische Panzer bis Avranches vor – der Weg in die Bretagne und nach Osten ist frei.', en: 'Marigny falls and the front gives way. Within a week American armour reaches Avranches – the way into Brittany and east is open.' },
+    azeville: { de: 'Nach dem Flammenwerferstoß ergibt sich die Besatzung – 169 Mann. Drei Tage später fällt auch Crisbecq; der Strand liegt nicht mehr unter Feuer.', en: 'After the flamethrower burst the garrison surrenders – 169 men. Three days later Crisbecq falls too; the beach is no longer under fire.' },
+    cherbourg: { de: 'Am 26. Juni kapituliert die Festung. Der Hafen ist so gründlich zerstört, dass erst im August wieder Schiffe entladen werden können.', en: 'The fortress surrenders on 26 June. The harbour is so thoroughly wrecked that ships cannot unload there until August.' },
+    mortain: { de: 'Das „Unternehmen Lüttich“ scheitert. Auf Höhe 314 halten 700 Mann bis zum 12. August – die deutschen Armeen laufen nun in den Kessel von Falaise.', en: '"Operation Lüttich" fails. On Hill 314 700 men hold out until 12 August – the German armies now run into the Falaise pocket.' },
     chambois: { de: 'Der Kessel ist dicht. Rund 50.000 deutsche Soldaten gehen in Gefangenschaft, Tausende sind gefallen. Am 25. August wird Paris befreit.', en: 'The pocket is sealed. Around 50,000 German soldiers are taken prisoner, thousands have died. On 25 August Paris is liberated.' },
   },
   de: {
@@ -663,6 +844,9 @@ export const EPILOGUE = {
     stlo: { de: 'Nach Wochen im Heckenkrieg ist die Front ausgeblutet. Am 25. Juli bricht sie unter Operation Cobra zusammen.', en: 'After weeks of hedgerow fighting the front is bled white. On 25 July it collapses under Operation Cobra.' },
     utah: { de: 'Das Widerstandsnest fällt nach wenigen Stunden. Utah Beach ist der Abschnitt mit den geringsten amerikanischen Verlusten.', en: 'The strongpoint falls within hours. Utah Beach is the sector with the lightest American losses.' },
     cobra: { de: 'Die Panzer-Lehr-Division ist nach dem Bombenteppich nur noch ein Schatten. Die Front im Westen bricht zusammen.', en: 'After the carpet bombing the Panzer Lehr Division is only a shadow. The western front collapses.' },
+    azeville: { de: 'Die Batterie hält zwei Angriffe aus. Beim dritten wird sie gesprengt und ausgeräuchert; die Besatzung geht in Gefangenschaft.', en: 'The battery beats off two attacks. In the third it is blown open and burnt out; the garrison is captured.' },
+    cherbourg: { de: 'Die Festung fällt am 26. Juni, doch die Sprengkommandos haben den Hafen für Wochen unbrauchbar gemacht.', en: 'The fortress falls on 26 June, but the demolition teams have made the harbour useless for weeks.' },
+    mortain: { de: 'Als der Nebel fällt, zerschlagen Jagdbomber die Kolonnen. Der Angriff auf Avranches bleibt stecken – und die Front gerät in die Umklammerung bei Falaise.', en: 'When the fog lifts, fighter-bombers smash the columns. The thrust on Avranches stalls – and the front is caught in the Falaise envelopment.' },
     chambois: { de: 'Ein Teil der Truppen entkommt durch den „Korridor des Todes“. Zurück bleiben zerstörte Kolonnen, Zehntausende geraten in Gefangenschaft.', en: 'Some troops escape through the "corridor of death". Left behind are destroyed columns; tens of thousands are captured.' },
   },
 };

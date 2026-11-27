@@ -322,6 +322,82 @@ MAPS.chambois = {
   anchors: { square: [70, 25], bridge: [-60, 0], bridgeE: [-35, 0], keep: [30, -40], westStart: [-380, 0], westStart2: [-360, -160], eastExit: [330, 50], usStart: [260, 40], ridge: [-200, -40] },
 };
 
+// Batterie Azeville (9. Juni 1944): vier Kasematten im Feld, Draht, Gräben, MG-Nester; Dorf Azeville im Westen
+MAPS.azeville = {
+  seed: 909, amp: 0, hedge: 1,
+  height: (x, z, n) => 8 + n.fbm(x / 250, z / 250, 3) * 6 + g2(x, z, 0, -60, 90) * 3,
+  roads: [
+    { w: 5, pts: [[-450, -40], [-250, -40], [0, 10], [250, 60], [450, 80]] },
+    { w: 4, pts: [[260, 450], [250, 200], [250, 60]] },
+    { w: 4, pts: [[-250, -40], [-240, 200], [-260, 450]] },
+  ],
+  towns: [{ x: -260, z: -50, r: 60, n: 10, church: { x: -250, z: -80, ry: 0 } }],
+  farms: [{ x: 220, z: 300, ry: 0.4 }, { x: -170, z: 280, ry: 1.2 }, { x: 330, z: -200, ry: 0.2 }],
+  features: [
+    { type: 'bunker', id: 'az1', x: -62, z: -72, ry: 0.45, crew: true },
+    { type: 'bunker', id: 'az2', x: -22, z: -96, ry: 0.15, crew: true },
+    { type: 'bunker', id: 'az3', x: 24, z: -96, ry: -0.15, crew: true },
+    { type: 'bunker', id: 'az4', x: 64, z: -72, ry: -0.45, crew: true },
+    { type: 'sandbags', x: -50, z: -10, r: 2.4 }, { type: 'sandbags', x: 55, z: -12, r: 2.4 },
+    { type: 'mg', id: 'mg1', x: -50, z: -10 }, { type: 'mg', id: 'mg2', x: 55, z: -12 },
+    { type: 'trenchline', pts: [[-95, -32], [-45, -6], [0, 0], [48, -8], [98, -32]] },
+    { type: 'wireline', z: 28, x0: -135, x1: 135, skip: [-6, 6] },
+    { type: 'flak', id: 'flakaz', x: 0, z: -48, crew: true },
+    { type: 'wreck', x: 160, z: 90 },
+  ],
+  clear: [[0, -50, 115]],
+  noHedge: (x, z) => Math.hypot(x, z + 50) < 135,
+  anchors: { usStart: [250, 380], usStart2: [60, 400], wire: [0, 62], battery: [0, -55], mg1: [-50, -10], mg2: [55, -12], az1: [-62, -72], az2: [-22, -96], az3: [24, -96], az4: [64, -72], village: [-250, -40], deRear: [-380, -150] },
+};
+
+// Cherbourg, Fort du Roule (25. Juni 1944): Festungsberg mit Steilhang zur Stadt (Norden), sanfter Südhang
+MAPS.cherbourg = {
+  seed: 2506, amp: 0, hedge: 1,
+  height: (x, z, n) => {
+    const hill = 30 * Math.exp(-(x * x) / (2 * 170 * 170)) * smoothstep(-45, 40, z) * (1 - smoothstep(100, 430, z));
+    return 4 + n.fbm(x / 200, z / 200, 3) * 2.5 + hill;
+  },
+  roads: [
+    { w: 6, pts: [[-120, 450], [-110, 200], [-90, 70], [-70, -40], [0, -230], [0, -450]], name: 'Route de Paris' },
+    { w: 6, pts: [[-450, -230], [0, -230], [450, -235]] },
+    { w: 4, pts: [[-90, 70], [0, 85], [110, 80]] },
+  ],
+  towns: [{ x: 0, z: -260, r: 170, n: 54, square: { x: 0, z: -230, w: 56, d: 46 }, church: { x: 70, z: -270, ry: 0 } }],
+  ruins: [{ x: 0, z: 70, r: 34, n: 4 }, { x: -60, z: -150, r: 50, n: 4 }],
+  farms: [{ x: 220, z: 330, ry: 0.4 }, { x: -300, z: 300, ry: 1.0 }],
+  features: [
+    { type: 'bunker', id: 'fort1', x: -42, z: 98, ry: Math.PI, crew: true },
+    { type: 'bunker', id: 'fort2', x: 46, z: 102, ry: Math.PI, crew: true, size: 1.1 },
+    { type: 'trenchline', pts: [[-140, 118], [-60, 124], [0, 126], [60, 124], [140, 116]] },
+    { type: 'wireline', z: 150, x0: -60, x1: 160, skip: [-8, 8] },
+    { type: 'flagpole', id: 'fortflag', x: 0, z: 70, side: 'us' },
+    { type: 'sandbags', x: -15, z: 120, r: 2.4 },
+    { type: 'wreck', x: -60, z: -170 }, { type: 'wreck', x: 30, z: -215 },
+  ],
+  clear: [[0, 80, 70]],
+  noHedge: (x, z) => z < -40 || Math.hypot(x, z - 85) < 55,
+  anchors: { usStart: [-110, 420], usStart2: [120, 400], slope: [-40, 200], fort: [0, 90], fort1: [-42, 98], fort2: [46, 102], fortflag: [0, 70], city: [0, -230], harbour: [0, -400], deRear: [0, -390], west: [-300, -200] },
+};
+
+// Mortain – Saint-Barthélemy (7. August 1944): Dorf an der Straße nach Westen, Höhe 314 im Nordwesten
+MAPS.mortain = {
+  seed: 807, amp: 0, hedge: 1,
+  height: (x, z, n) => 10 + n.fbm(x / 260, z / 260, 3) * 8 + g2(x, z, -180, -260, 170) * 16,
+  roads: [
+    { w: 6, pts: [[-450, 10], [-200, 0], [0, 0], [200, -20], [450, -30]] },
+    { w: 4, pts: [[0, 0], [20, -200], [10, -450]] },
+    { w: 4, pts: [[0, 0], [-30, 200], [-20, 450]] },
+  ],
+  towns: [{ x: 0, z: 0, r: 78, n: 18, square: { x: 0, z: 6, w: 34, d: 30 }, church: { x: -32, z: -34, ry: Math.PI / 2 } }],
+  farms: [{ x: 230, z: 160, ry: 0.4 }, { x: -230, z: 220, ry: 1.0 }, { x: 260, z: -230, ry: 0.3 }],
+  features: [
+    { type: 'sandbags', x: 82, z: -12, r: 2.4 }, { type: 'sandbags', x: 70, z: 22, r: 2.4 },
+    { type: 'wreck', x: 150, z: -16 },
+  ],
+  clear: [[0, 0, 80]],
+  anchors: { village: [0, 0], eastEntry: [85, -8], crossroads: [0, 6], westExit: [-250, 5], deStart: [420, -30], deStart2: [400, 160], usReserve: [-390, 0], hill: [-180, -260] },
+};
+
 // Kartennamen für das freie Spiel
 export const MAP_NAMES = {
   bocage_night: { de: 'Bocage bei Sainte-Marie-du-Mont', en: 'Bocage near Sainte-Marie-du-Mont' },
@@ -335,6 +411,9 @@ export const MAP_NAMES = {
   utah: { de: 'Utah Beach', en: 'Utah Beach' },
   cobra: { de: 'Marigny (Operation Cobra)', en: 'Marigny (Operation Cobra)' },
   chambois: { de: 'Chambois (Kessel von Falaise)', en: 'Chambois (Falaise Pocket)' },
+  azeville: { de: 'Batterie Azeville', en: 'Azeville battery' },
+  cherbourg: { de: 'Cherbourg – Fort du Roule', en: 'Cherbourg – Fort du Roule' },
+  mortain: { de: 'Mortain – Saint-Barthélemy', en: 'Mortain – Saint-Barthélemy' },
 };
 
 export const clampMap = (v) => clamp(v, -445, 445);

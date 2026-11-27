@@ -73,7 +73,9 @@ export class Hud {
     if (tk) { el['w-name'].textContent = tk.name; el['w-ammo'].innerHTML = tk.ammo; }
     else {
       el['w-name'].textContent = W.name + (W.cal ? ' · ' + W.cal : '');
-      el['w-ammo'].innerHTML = W.grenade ? `${A.res}` : `<b>${A.mag}</b> / ${A.res}` + (p.reloading > 0 ? ` <i>${T('lädt', 'reloading')}</i>` : '');
+      const h = W.heat ? (p.heat[p.wid] || 0) : 0;
+      const heatBar = W.heat ? `<span class="heat${p.jammed[p.wid] ? ' jam' : h > 0.75 ? ' hot' : ''}" title="${T('Laufhitze', 'Barrel heat')}"><i style="width:${Math.round(h * 100)}%"></i></span>` : '';
+      el['w-ammo'].innerHTML = (W.grenade ? `${A.res}` : `<b>${A.mag}</b> / ${A.res}` + (p.reloading > 0 ? ` <i>${p.swapping ? T('Laufwechsel', 'barrel change') : T('lädt', 'reloading')}</i>` : '')) + heatBar;
     }
     const nid = p.weapons.find((w) => WEAPONS[w].grenade);
     el['w-nade'].textContent = nid ? '◉ ' + p.ammo[nid].res : '';
@@ -196,6 +198,13 @@ export class Hud {
       else if (u.lastShot && g.time - u.lastShot < 2 && u.pos.distanceTo(p.pos) < 90) dot(u.pos.x, u.pos.z, '#ff5040', 2.5);
     }
     for (const a of g.avatars.values()) if (a.visible && a.alive && a.team === p.team) dot(a.pos.x, a.pos.z, '#7fd0ff', 3.5);
+    // eigene Panzer (leere zum Einsteigen als Quadrat)
+    for (const t of g.units.tanks) {
+      if (!t.alive || t.team !== p.team || Math.abs(t.pos.x - p.pos.x) > R || Math.abs(t.pos.z - p.pos.z) > R) continue;
+      const sx = S / 2 + (t.pos.x - p.pos.x) * k, sz = S / 2 + (t.pos.z - p.pos.z) * k;
+      c.fillStyle = t.abandoned && !(t.crew && (t.crew[0] !== null || t.crew[1] !== null)) ? '#ffd34d' : '#8fd06a';
+      c.fillRect(sx - 4, sz - 4, 8, 8); c.strokeStyle = '#000a'; c.lineWidth = 1; c.strokeRect(sx - 4, sz - 4, 8, 8);
+    }
     for (const mk of g.missions.markers(p.team)) dot(mk.x, mk.z, '#ffd34d', 5);
     c.restore();
     // Spielerpfeil

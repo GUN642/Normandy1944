@@ -7,7 +7,7 @@ Tastatur/Maus, Gamepad oder Touchscreen. Von **amerikanischer und deutscher Seit
 **Spielen:** https://gun642.github.io/Normandy1944/
 **Android-APK:** https://gun642.github.io/Normandy1944/apk/normandy1944.apk
 
-## Storyline – acht Operationen in historischer Reihenfolge
+## Storyline – vierzehn Operationen in historischer Reihenfolge
 
 | # | Operation | Datum / Zeit | US-Seite | Deutsche Seite |
 | --- | --- | --- | --- | --- |
@@ -22,6 +22,9 @@ Tastatur/Maus, Gamepad oder Touchscreen. Von **amerikanischer und deutscher Seit
 | + | **Utah Beach** | 6.6., 06:30 | Landung bei Tageslicht, Ufermauer, WN 5, Damm nach Pouppeville | Dünen halten |
 | + | **Operation Cobra – Marigny** | 25.–26.7. | Nach dem Bombenteppich über die Straße St-Lô–Périers, Panzer IV, Marigny | Panzer-Lehr-Division hält Hecken und Ort |
 | + | **Kessel von Falaise – Chambois** | 20.8. | Chambois mit dem Donjon gegen den Ausbruch halten | Fallschirmjäger brechen über die Dives aus |
+| + | **Batterie Azeville** | 9.6., 14:00 | Draht, MG-Nester, vier Kasematten sprengen | Batterie mit Graben und Flak halten |
+| + | **Cherbourg – Fort du Roule** | 25.6., 13:00 | Südhang hinauf, Bunker sprengen, Flagge auf dem Fort, Häuserkampf | Fort und Stadtplatz halten |
+| + | **Mortain – Saint-Barthélemy** | 7.8., 09:00 | Dorf im Morgennebel gegen Panzer halten, Jabos nach Nebelauflösung | Mit Panzern durch das Dorf nach Westen |
 
 - **Kampagne:** je Seite eine eigene historische Reihenfolge, Missionen werden nacheinander freigeschaltet;
   nach jedem Sieg folgt der historische Ausgang (einschließlich Verlusten). Fällt man, übernimmt man den
@@ -45,6 +48,10 @@ Abläufe folgen den historischen Ereignissen. Keine verfassungsfeindlichen Symbo
   Feuern oder Zielen lässt den Verwundeten sofort los).
   KI-Kameraden verarzten sich gegenseitig und kommen auch zum Spieler; im Mehrspieler können sich Spieler gegenseitig retten und Verwundete ziehen.
   Blut an der Einschussstelle, Blutlache, Verband nach dem Verarzten.
+- **Verlassene Panzer:** In jeder Mission stehen hinter der eigenen Linie zufällig ein bis zwei fahrbereite, aber unbesetzte
+  Panzer (Sherman; deutsch Panzer IV, StuG III oder im Cotentin Beutepanzer H39) – auf der Minikarte gelb markiert, per Funk gemeldet.
+- **MG-Hitze:** Dauerfeuer erhitzt den Lauf (Balken unter der Munition); heiß streut die Waffe und raucht, bei 100 % Störung.
+  MG 42: Nachladetaste = Laufwechsel (zwei Ersatzläufe, kühlen im Laufschützer ab). BAR und Panzer-MG müssen abkühlen.
 - **Panzer besetzen:** Am eigenen Panzer E (Controller: R) halten. Erster Platz Fahrer und Richtschütze (fahren, Turm mit
   der Maus/rechtem Stick, Kanone mit Nachladezeit, Zielfernrohr), zweiter Platz MG-Schütze – im Mehrspieler fährt einer,
   der andere bedient das MG. Hecken, Mauern und Häuser halten auch Panzer auf; wird der Panzer abgeschossen, ist die Besatzung schwer verwundet.
@@ -87,7 +94,7 @@ Sichtweite, Schatten, Effektmenge, Sichtfeld und FPS-Anzeige.
 ## Technik
 
 - `web/` – das Spiel (three.js, ES-Module, kein Build-Schritt). `js/story.js` enthält die Storyline,
-  `js/maps.js` die acht Karten, `js/weapons.js` Waffen und Modelle.
+  `js/maps.js` die Karten, `js/weapons.js` Waffen und Modelle.
 - `android/` – WebView-Hülle mit Update-Prüfung, LAN-Mehrspieler und Sprachausgabe (aus dem Medevac-sim).
 - `.github/workflows/build-deploy.yml` – bei jedem Push Prüfung + Probebau, auf dem Standardbranch
   signierte APK + Veröffentlichung auf GitHub Pages.
